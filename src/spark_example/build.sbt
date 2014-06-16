@@ -8,5 +8,7 @@ scalaVersion := "2.11.1" */
 
 libraryDependencies += "org.apache.spark" %% "spark-core" % "1.0.0"
 
+libraryDependencies += "org.apache.mahout" %% "mahout-core" % "0.9"
+
 resolvers += "Akka Repository" at "http://repo.akka.io/releases/"
 
