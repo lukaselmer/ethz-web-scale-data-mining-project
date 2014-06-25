@@ -10,6 +10,7 @@ import de.l3s.boilerpipe.extractors;
 import java.io.StringReader;
 import de.l3s.boilerpipe.sax.HTMLHighlighter;
 import org.cyberneko.html.HTMLConfiguration
+import scala.collection.JavaConversions._
 
 
 object SimpleApp {
@@ -44,21 +45,26 @@ object SimpleApp {
                 {
                       try
                       {
+                        val anchors = List()
                         val textDocument = new BoilerpipeSAXInput(new InputSource(new java.io.StringReader(doc))).getTextDocument()
+                        val originalDoc = textDocument.getTextBlocks()
                         val documentContent = extractors.ArticleExtractor.INSTANCE.getText(textDocument)
-                        if(getAnchors) {
-                          val hh = HTMLHighlighter.newExtractingInstance()
-                          val highlightedHTML = hh.process(textDocument, doc)
-                          val anchorRegex = "(?s)<\\s*a\\s+.*?href\\s*=\\s*['\"]([^\\s>]*)['\"]";
-                          val anchorPattern = Pattern.compile(anchorRegex, Pattern.CASE_INSENSITIVE);
-
-                          val matcher = anchorPattern.matcher(highlightedHTML);
-                          val anchors = List()
-                          while (matcher.find()) {
-                            anchors.+(matcher.group(1))
-                          }
+                         if(getAnchors) {
+                           textDocument.getTextBlocks().foreach(hhh=>
+                           {
+                             var cur_elem = -1;
+                             val settedBits = hhh.getContainedTextElements()
+                             do
+                             {
+                               cur_elem = settedBits.nextSetBit(1 + cur_elem)
+                               if(textDocument.anchors.containsKey(cur_elem)) {
+                                 val cur_href = textDocument.anchors.get(cur_elem);
+                                 anchors.+(cur_href)
+                               }
+                             }
+                             while(cur_elem != -1)
+                           });
                         }
-                        //println(highlightedHTML)
                         documentContent.split(" ")
                       }
                       catch
