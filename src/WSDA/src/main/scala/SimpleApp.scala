@@ -11,10 +11,10 @@ import java.io.StringReader;
 import de.l3s.boilerpipe.sax.HTMLHighlighter;
 import org.cyberneko.html.HTMLConfiguration
 import scala.collection.JavaConversions._
-
+import scalax.io._
+import java.io._
 
 object SimpleApp {
-
   def createSparkContext(): SparkContext = {
 
     val conf = new SparkConf().setAppName("Simple Application")
@@ -31,15 +31,23 @@ object SimpleApp {
     new SparkContext(conf)
   }
 
+  def writeToFile(p: String, s: String): Unit = {
+    val pw = new java.io.PrintWriter(new File(p))
+    try pw.write(s) finally pw.close()
+  }
   def main(args: Array[String]) {
     val sc = createSparkContext()
     val logFile = args(0)
     val min_partitions = args(1).toInt
     val getAnchors= args(2).toBoolean
+    val outputPath = args(3)
     //val min_partitions = 30;
     //val logFile = sc.getConf.get("data")
     val files = sc.wholeTextFiles(logFile, min_partitions)
-    val words=  files.flatMap(x => x._2.split("WARC/1.0").drop(2))
+    val words=  files.flatMap(x =>
+                {
+                    x._2.split("WARC/1.0").drop(2)
+                })
                 .map(doc => doc.substring(doc.indexOf("\n\r", 1+doc.indexOf("\n\r")))).filter(doc => !doc.isEmpty())
                 .flatMap(doc =>
                 {
@@ -49,6 +57,8 @@ object SimpleApp {
                         val textDocument = new BoilerpipeSAXInput(new InputSource(new java.io.StringReader(doc))).getTextDocument()
                         val originalDoc = textDocument.getTextBlocks()
                         val documentContent = extractors.ArticleExtractor.INSTANCE.getText(textDocument)
+                        val f_id = outputPath+java.util.UUID.randomUUID.toString
+                        writeToFile(f_id, documentContent)
                          if(getAnchors) {
                            textDocument.getTextBlocks().foreach(hhh=>
                            {
@@ -59,7 +69,7 @@ object SimpleApp {
                                cur_elem = settedBits.nextSetBit(1 + cur_elem)
                                if(textDocument.anchors.containsKey(cur_elem)) {
                                  val cur_href = textDocument.anchors.get(cur_elem);
-                                 anchors.+(cur_href)
+                                 //anchors.+(cur_href(0))
                                }
                              }
                              while(cur_elem != -1)

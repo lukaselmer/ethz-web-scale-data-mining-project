@@ -40,7 +40,7 @@ import de.l3s.boilerpipe.util.UnicodeTokenizer;
 public class BoilerpipeHTMLContentHandler implements ContentHandler {
 
 	private final Map<String, TagAction> tagActions;
-    private Map<Integer, String> anchors = new HashMap<Integer, String>();
+    private Map<Integer, String[]> anchors = new HashMap<Integer, String[]>();
 	private String title = null;
 
 	static final String ANCHOR_TEXT_START = "$\ue00a<";
@@ -218,9 +218,10 @@ public class BoilerpipeHTMLContentHandler implements ContentHandler {
 		}
         if(isAnchor)
         {
+            String values[] = {cur_anchor, cur_href};
             String this_anchor = cur_anchor;
             String this_href = cur_href;
-            anchors.put(textElementIdx, cur_href);
+            anchors.put(textElementIdx, values);
             cur_anchor ="";
             cur_href = "";
             isAnchor = false;

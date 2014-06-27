@@ -28,7 +28,7 @@ import java.util.Map;
  */
 public class TextDocument implements Cloneable {
     final List<TextBlock> textBlocks;
-    public Map<Integer, String> anchors;
+    public Map<Integer, String[]> anchors;
     String title;
 
     /**
@@ -51,7 +51,7 @@ public class TextDocument implements Cloneable {
      * @param textBlocks
      *            The text blocks of this document.
      */
-    public TextDocument(final String title, final List<TextBlock> textBlocks, final Map<Integer, String> anchors) {
+    public TextDocument(final String title, final List<TextBlock> textBlocks, final Map<Integer, String[]> anchors) {
         this.anchors = anchors;
         this.title = title;
         this.textBlocks = textBlocks;

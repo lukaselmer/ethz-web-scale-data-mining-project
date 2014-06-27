@@ -16,6 +16,8 @@ libraryDependencies += "net.sourceforge.nekohtml" % "nekohtml" % "1.9.21"
 
 libraryDependencies += "org.apache.hadoop" % "hadoop-client" % "2.4.0"
 
+libraryDependencies += "com.github.scala-incubator.io" %% "scala-io-file" % "0.4.2"
+
 resolvers += "Akka Repository" at "http://repo.akka.io/releases/"
 
 //resolvers += "boilerpipe-m2-repo" at "http://boilerpipe.googlecode.com/svn/repo/"
