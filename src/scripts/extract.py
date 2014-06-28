@@ -1,15 +1,17 @@
 #!/usr/bin/env/ python2
 
-import logging
+import logging, os
 
 ID = ["WARC-TREC-ID", "WARC-Record-ID"]
 URI = ["WARC-Target-URI"]
+address =  "/mnt/cw12/cw-data"
 
 def LoadDocuments(fileNames):
     ID_Store = []
     URI_Store = []
     HTML_Store = []
     for fileName in fileNames:
+        print "Parsing file", fileName
         try:
             lis = fileName.rfind('/') + 1
             path, name = '', fileName
@@ -45,13 +47,16 @@ def LoadDocuments(fileNames):
             logging.error("Impossible to parse file %s" % fileName)
     return ID_Store, URI_Store, HTML_Store
 
-def LoadDocumentsFromFile(fileName):
-    with open(fileName) as f:
-        lines = [line.strip() for line in f.readlines()]
-        return LoadDocuments(lines)
+def LoadDocumentsFromFile():
+    filename = []
+    for folder in os.listdir(address):
+        for subfolder in os.listdir(address+"/"+folder):
+            for file in os.listdir(address+"/"+folder+"/"+subfolder):
+                filename.append(address+"/"+folder+"/"+subfolder+"/"+file)
+    return LoadDocuments(filename)
 
 if __name__ == '__main__':
-    ids, uri, html = LoadDocumentsFromFile('data_full.txt')
+    ids, uri, html = LoadDocumentsFromFile()
     with open('id.txt', 'w') as f:
         for I in ids:
             f.write(I+'\n')
