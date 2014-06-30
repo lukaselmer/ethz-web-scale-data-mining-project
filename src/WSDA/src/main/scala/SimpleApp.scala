@@ -1,6 +1,6 @@
 import java.net.URL
 import java.util.regex.Pattern
-
+import org.apache.log4j._;
 import com.sun.jersey.spi.StringReader
 import de.l3s.boilerpipe.sax.BoilerpipeSAXInput
 import org.apache.spark.{SparkConf, SparkContext}
@@ -11,8 +11,15 @@ import java.io.StringReader;
 import de.l3s.boilerpipe.sax.HTMLHighlighter;
 import org.cyberneko.html.HTMLConfiguration
 import scala.collection.JavaConversions._
-import scalax.io._
 import java.io._
+import com.esotericsoftware.kryo.Kryo
+import org.apache.spark.serializer.KryoRegistrator
+
+class MyRegistrator extends KryoRegistrator {
+  override def registerClasses(kryo: Kryo) {
+    kryo.register(classOf[PrintWriter])
+  }
+}
 
 object SimpleApp {
   def createSparkContext(): SparkContext = {
@@ -20,6 +27,8 @@ object SimpleApp {
     val conf = new SparkConf().setAppName("Simple Application")
     conf.set("spark.executor.memory", "100g");
     conf.set("spark.default.parallelism","200");
+    conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+    conf.set("spark.kryo.registrator", "MyRegistrator")
     // Master is not set => use local master, and local data
     if (!conf.contains("spark.master")) {
       conf.setMaster("local[*]")
@@ -32,10 +41,15 @@ object SimpleApp {
   }
 
   def writeToFile(p: String, s: String): Unit = {
-    val pw = new java.io.PrintWriter(new File(p))
+    val pw = new PrintWriter(new File(p))
     try pw.write(s) finally pw.close()
   }
   def main(args: Array[String]) {
+    val log = Logger.getLogger(SimpleApp.getClass().getName());
+    val layout = new SimpleLayout();
+    val appender = new FileAppender(layout,"data/log.txt",false);
+    log.addAppender(appender);
+    log.info("Hello this is an info message");
     val sc = createSparkContext()
     val logFile = args(0)
     val min_partitions = args(1).toInt
@@ -45,9 +59,8 @@ object SimpleApp {
     //val logFile = sc.getConf.get("data")
     val files = sc.wholeTextFiles(logFile, min_partitions)
     val words=  files.flatMap(x =>
-                {
                     x._2.split("WARC/1.0").drop(2)
-                })
+                )
                 .map(doc => doc.substring(doc.indexOf("\n\r", 1+doc.indexOf("\n\r")))).filter(doc => !doc.isEmpty())
                 .flatMap(doc =>
                 {
@@ -75,11 +88,12 @@ object SimpleApp {
                              while(cur_elem != -1)
                            });
                         }
+
                         documentContent.split(" ")
                       }
                       catch
                       {
-                        case e: Exception=> Array("")
+                        case e: Exception=> { Array("")}
                       }
                 })
     val counts = words.map(word => (word, 1)).reduceByKey(_ + _)
