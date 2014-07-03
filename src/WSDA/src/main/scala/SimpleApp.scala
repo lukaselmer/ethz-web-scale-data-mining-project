@@ -59,7 +59,8 @@ object SimpleApp {
     //val logFile = sc.getConf.get("data")
     val files = sc.wholeTextFiles(logFile, min_partitions)
     val words=  files.flatMap(x =>
-                    x._2.split("WARC/1.0").drop(2)
+					x._2.split("Content-Length").drop(1)//.drop(2)
+                    //x._2.split("WARC/1.0").drop(2)
                 )
                 .map(doc => doc.substring(doc.indexOf("\n\r", 1+doc.indexOf("\n\r")))).filter(doc => !doc.isEmpty())
                 .flatMap(doc =>
@@ -69,8 +70,18 @@ object SimpleApp {
                         val anchors = List()
                         val textDocument = new BoilerpipeSAXInput(new InputSource(new java.io.StringReader(doc))).getTextDocument()
                         val originalDoc = textDocument.getTextBlocks()
-                        val documentContent = extractors.ArticleExtractor.INSTANCE.getText(textDocument)
-                        val f_id = outputPath+java.util.UUID.randomUUID.toString
+                        var documentContent = extractors.ArticleExtractor.INSTANCE.getText(textDocument)
+                        //val f_id = outputPath+java.util.UUID.randomUUID.toString
+                        var f_id = outputPath + "/"
+                        val indexofID = doc.indexOfSlice("WARC-TREC-ID")
+                        println(indexofID)
+                        if (indexofID > 0) {
+                            f_id = f_id + doc.slice(indexofID+14, indexofID+39)
+                        }
+                        val indexofURI = doc.indexOf("WARC-Target-URI")
+                        if (indexofURI > 0) {
+                            documentContent = doc.slice(indexofURI+17, doc.length()) + documentContent
+                        }
                         writeToFile(f_id, documentContent)
                          if(getAnchors) {
                            textDocument.getTextBlocks().foreach(hhh=>
