@@ -62,51 +62,49 @@ object SimpleApp {
 					x._2.split("Content-Length").drop(1)//.drop(2)
                     //x._2.split("WARC/1.0").drop(2)
                 )
-                .map(doc => doc.substring(doc.indexOf("\n\r", 1+doc.indexOf("\n\r")))).filter(doc => !doc.isEmpty())
-                .flatMap(doc =>
-                {
-                      try
-                      {
-                        val anchors = List()
-                        val textDocument = new BoilerpipeSAXInput(new InputSource(new java.io.StringReader(doc))).getTextDocument()
-                        val originalDoc = textDocument.getTextBlocks()
-                        var documentContent = extractors.ArticleExtractor.INSTANCE.getText(textDocument)
-                        //val f_id = outputPath+java.util.UUID.randomUUID.toString
-                        var f_id = outputPath + "/"
-                        val indexofID = doc.indexOfSlice("WARC-TREC-ID")
-                        println(indexofID)
-                        if (indexofID > 0) {
-                            f_id = f_id + doc.slice(indexofID+14, indexofID+39)
-                        }
-                        val indexofURI = doc.indexOf("WARC-Target-URI")
-                        if (indexofURI > 0) {
-                            documentContent = doc.slice(indexofURI+17, doc.length()) + documentContent
-                        }
-                        writeToFile(f_id, documentContent)
-                         if(getAnchors) {
-                           textDocument.getTextBlocks().foreach(hhh=>
-                           {
-                             var cur_elem = -1;
-                             val settedBits = hhh.getContainedTextElements()
-                             do
-                             {
-                               cur_elem = settedBits.nextSetBit(1 + cur_elem)
-                               if(textDocument.anchors.containsKey(cur_elem)) {
-                                 val cur_href = textDocument.anchors.get(cur_elem);
-                                 //anchors.+(cur_href(0))
-                               }
-                             }
-                             while(cur_elem != -1)
-                           });
-                        }
+                //.map(doc => doc.substring(doc.indexOf("\n\r", 1+doc.indexOf("\n\r")))).filter(doc => !doc.isEmpty())
+      .map(doc => doc).filter(doc => !doc.isEmpty())
+      .flatMap(doc => {
+      try {
+        val anchors = List()
+        val textDocument = new BoilerpipeSAXInput(new InputSource(new java.io.StringReader(doc))).getTextDocument()
+        val originalDoc = textDocument.getTextBlocks()
+        var documentContent = extractors.ArticleExtractor.INSTANCE.getText(textDocument)
+        //val f_id = outputPath+java.util.UUID.randomUUID.toString
+        var f_id = outputPath + "/"
+        val indexofID = doc.indexOf("WARC-TREC-ID")
+        println(indexofID)
+        if (indexofID > 0) {
+          f_id = f_id + doc.slice(indexofID + 14, indexofID + 39)
+        }
+        val indexofURI = doc.indexOf("WARC-Target-URI")
+        if (indexofURI > 0) {
+          documentContent = doc.slice(indexofURI + 17, doc.length()) + documentContent
+        }
+        writeToFile(f_id, documentContent)
+        if (getAnchors) {
+          textDocument.getTextBlocks().foreach(hhh => {
+            var cur_elem = -1;
+            val settedBits = hhh.getContainedTextElements()
+            do {
+              cur_elem = settedBits.nextSetBit(1 + cur_elem)
+              if (textDocument.anchors.containsKey(cur_elem)) {
+                val cur_href = textDocument.anchors.get(cur_elem);
+                //anchors.+(cur_href(0))
+              }
+            }
+            while (cur_elem != -1)
+          });
+        }
 
-                        documentContent.split(" ")
-                      }
-                      catch
-                      {
-                        case e: Exception=> { Array("")}
-                      }
-                })
+        documentContent.split(" ")
+      }
+      catch {
+        case e: Exception => {
+          Array("")
+        }
+      }
+    })
     val counts = words.map(word => (word, 1)).reduceByKey(_ + _)
 
     val top_words = counts.top(100)(Ordering.by[(String, Int), Int](_._2))
