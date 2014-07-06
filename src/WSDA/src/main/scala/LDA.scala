@@ -168,7 +168,10 @@ object LDA {
       val t1 = System.currentTimeMillis()
       println("Elapsed time for iteration: " +global_iteration + "---"  + (t1 - t0) + "ms")
     }
-    writeToFile("ap/lambda.txt", lambda.toString(V+10, 10000000))
+    val final_output = sc.parallelize(List(lambda.toString(V+10,10000)))
+    final_output.saveAsTextFile("ap/lambda.txt")
+
+    //writeToFile("ap/lambda.txt", lambda.toString(V+10, 10000000))
     //print(lambda.toString(V,K))
     //val y = 1;
     //val z = sum(lambda, Axis._1)
