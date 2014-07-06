@@ -18,6 +18,21 @@ libraryDependencies += "org.apache.hadoop" % "hadoop-client" % "2.4.0"
 
 libraryDependencies += "com.github.scala-incubator.io" %% "scala-io-file" % "0.4.2"
 
+libraryDependencies  ++= Seq(
+  // other dependencies here
+  "org.scalanlp" % "breeze_2.10" % "0.7",
+  // native libraries are not included by default. add this if you want them (as of 0.7)
+  // native libraries greatly improve performance, but increase jar sizes.
+  "org.scalanlp" % "breeze-natives_2.10" % "0.7"
+)
+
+libraryDependencies += "edu.umd" %"cloud9" % "1.4.9"
+
+resolvers ++= Seq(
+  // other resolvers here
+  "Sonatype Releases" at "https://oss.sonatype.org/content/repositories/releases/"
+)
+
 resolvers += "Akka Repository" at "http://repo.akka.io/releases/"
 
 //resolvers += "boilerpipe-m2-repo" at "http://boilerpipe.googlecode.com/svn/repo/"
