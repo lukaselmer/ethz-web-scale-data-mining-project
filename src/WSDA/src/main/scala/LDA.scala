@@ -69,6 +69,8 @@ object LDA {
       val doc = cur._1
       val doc_id = cur._2
       val elems = doc.split(" ");
+
+      doc.substring(1+doc.indexOf(" "))
       var indexes = Array[Int]();
       var counts = Array[Int]();
       /*)
@@ -81,7 +83,7 @@ object LDA {
         document(index) = count
       });
       */
-      Tuple2(elems.drop(1),doc_id)
+      Tuple2(elems.drop(1).map(e=> {val params = e.split(":"); Tuple2(params(0).toInt, params(1).toDouble); }),doc_id)
       //Tuple2(document, doc_id)
     }).cache();
 
@@ -91,20 +93,19 @@ object LDA {
     var alpha = DenseVector.rand[Double](K) // MR.LDA uses 0.001
     val sufficientStats = DenseVector.zeros[Double](K)
 
-
     for(global_iteration <- 0 until MAX_GLOBAL_ITERATION) {
       val t0 = System.currentTimeMillis()
       val result = documents.flatMap(cur => {
         val document = cur._1
         val cur_doc = cur._2.toInt
         val phi = DenseMatrix.zeros[Double](V, K);
-        var emit = new java.util.HashMap[(Int, Int), Double]
+        val emit = new java.util.HashMap[(Int, Int), Double]
         for (iter <- 0 until GAMMA_CONV_ITER) {
           val sigma = DenseVector.zeros[Double](K)
           for (word_ind <- 0 until document.length) {
-            var el = document(word_ind).split(":");
-            val v = el(0).toInt
-            val count = el(1).toDouble;
+            //val el = document(word_ind).split(":");
+            val v = document(word_ind)._1
+            val count = document(word_ind)._2;
 
             for (k <- 0 until K) {
               phi(v, k) = lambda(v, k) * Math.exp(Gamma.digamma(gamma(cur_doc, k)));
@@ -118,9 +119,9 @@ object LDA {
         }
         for (k <- 0 until K) {
           for (word_ind <- 0 until document.length) {
-            var el = document(word_ind).split(":");
-            val v = el(0).toInt
-            val count = el(1).toDouble;
+            //var el = document(word_ind).split(":");
+            val v = document(word_ind)._1;
+            val count = document(word_ind)._2 ;
             if(emit.contains((k,v)))
               emit.update((k,v), emit.get((k,v)) + count*phi(v,k));
               //emit((k,v)) = emit.get((k,v)) + count * phi(v, k);
@@ -177,7 +178,6 @@ object LDA {
     }
     val final_output = sc.parallelize(List(lambda.toString(V+10,10000)))
     final_output.saveAsTextFile("/local/home/hanya/output/ap2/")
-
     //writeToFile("ap/lambda.txt", lambda.toString(V+10, 10000000))
     //print(lambda.toString(V,K))
     //val y = 1;
