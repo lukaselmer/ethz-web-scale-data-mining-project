@@ -3,6 +3,7 @@ import java.util.regex.Pattern
 import breeze.linalg._
 
 import edu.umd.cloud9.math.Gamma;
+import scala.collection.mutable;
 import scala.math;
 import org.apache.log4j._;
 import com.sun.jersey.spi.StringReader
@@ -63,7 +64,7 @@ object LDA {
     val ALPHA_MAX_ITERATION = 1000;
     val ETA = 0.000000000001;
     val DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD = 0.000001;
-    val documents = sc.textFile("ap/ap_sample.dat").zipWithIndex().map(cur =>
+    val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/testh/ap.da",300).zipWithIndex().map(cur =>
     {
       val doc = cur._1
       val doc_id = cur._2
@@ -97,7 +98,7 @@ object LDA {
         val document = cur._1
         val cur_doc = cur._2.toInt
         val phi = DenseMatrix.zeros[Double](V, K);
-        var emit = List[((Int, Int), Double)]()
+        var emit = new java.util.HashMap[(Int, Int), Double]
         for (iter <- 0 until GAMMA_CONV_ITER) {
           val sigma = DenseVector.zeros[Double](K)
           for (word_ind <- 0 until document.length) {
@@ -120,10 +121,16 @@ object LDA {
             var el = document(word_ind).split(":");
             val v = el(0).toInt
             val count = el(1).toDouble;
-            emit = emit.+:((k, v), count * phi(v, k))
+            if(emit.contains((k,v)))
+              emit.update((k,v), emit.get((k,v)) + count*phi(v,k));
+              //emit((k,v)) = emit.get((k,v)) + count * phi(v, k);
+          else
+              emit.put((k,v), count*phi(v,k))
+              //emit = emit +:((k, v), count * phi(v, k))
           }
           val suff_stat = Gamma.digamma(gamma(cur_doc, k)) - Gamma.digamma((sum(gamma(cur_doc, ::).t)))
-          emit = emit.+:((k, DELTA), suff_stat)
+          emit.put((k,DELTA), suff_stat)
+          //emit = emit.+:((k, DELTA), suff_stat)
         }
         emit
       }).reduceByKey(_ + _)
@@ -169,7 +176,7 @@ object LDA {
       println("Elapsed time for iteration: " +global_iteration + "---"  + (t1 - t0) + "ms")
     }
     val final_output = sc.parallelize(List(lambda.toString(V+10,10000)))
-    final_output.saveAsTextFile("ap/lambda.txt")
+    final_output.saveAsTextFile("/local/home/hanya/output/ap2/")
 
     //writeToFile("ap/lambda.txt", lambda.toString(V+10, 10000000))
     //print(lambda.toString(V,K))
