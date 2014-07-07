@@ -15,20 +15,24 @@ object HtmlToTextConversionApp {
       conf.setMaster("local[*]")
       conf.set("data", "data")
     } else {
+      conf.set("spark.executor.memory", "100g");
+      conf.set("spark.default.parallelism","200");
+      conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      conf.set("spark.kryo.registrator", "MyRegistrator")
       conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/0000tw")
     }
     new SparkContext(conf)
   }
 
   def processWarcFile(inputPath: String, contents: String) {
-    val writer: Writer = initSequenceFileWriter
     val processor = new WarcFileProcessor(contents)
-    processor.iterator
 
-    writer.append("asodfi", "asodijfoaijewf awefoijewoifj awoiefjoijew")
+    // TODO: finish this
 
+    processor.foreach(doc => println(doc._1 + ": " + doc._2))
+    //val writer: Writer = initSequenceFileWriter
+    //processor.foreach(doc => writer.append(doc._1, doc._2))
   }
-
 
   def initSequenceFileWriter: Writer = {
     val uri = "/ClueWebConverted"
@@ -46,11 +50,5 @@ object HtmlToTextConversionApp {
     val logFile = sc.getConf.get("data")
     val files = sc.wholeTextFiles(logFile)
     files.foreach(f => processWarcFile(f._1, f._2))
-
-    //val counts = lines.flatMap(line => line.split(" ")).map(word => (word, 1)).reduceByKey(_ + _)
-    //val top_words = counts.top(100)(Ordering.by[(String, Int), Int](_._2))
-    //top_words.foreach(x => {
-    //  println(x._1 + ":" + x._2)
-    //})
   }
 }
