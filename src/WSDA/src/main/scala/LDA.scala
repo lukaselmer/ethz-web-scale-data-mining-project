@@ -1,6 +1,7 @@
 import java.net.URL
 import java.util.regex.Pattern
 import breeze.linalg._
+import breeze.numerics.{exp, digamma}
 
 import edu.umd.cloud9.math.Gamma;
 import scala.collection.mutable;
@@ -20,7 +21,7 @@ import java.io._
 object LDA {
   def createSparkContext(): SparkContext = {
     val conf = new SparkConf().setAppName("Simple Application")
-    conf.set("spark.executor.memory", "100g");
+    conf.set("spark.executor.memory", "10g");
     conf.set("spark.default.parallelism","200");
     // Master is not set => use local master, and local data
     if (!conf.contains("spark.master")) {
@@ -31,6 +32,16 @@ object LDA {
     }
 
     new SparkContext(conf)
+  }
+
+  def dddigamma(v: Double):Double = {
+    var x = v;
+    x = x + 6;
+    var p=1/(x*x);
+    p=(((0.004166666666667*p-0.003968253986254)*p+
+      0.008333333333333)*p-0.083333333333333)*p;
+    p=p+ Math.log(x)-0.5/x-1/(x-1)-1/(x-2)-1/(x-3)-1/(x-4)-1/(x-5)-1/(x-6);
+    return p;
   }
 
   def main(args: Array[String]) {
@@ -55,7 +66,7 @@ object LDA {
     val ALPHA_MAX_ITERATION = 1000;
     val ETA = 0.000000000001;
     val DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD = 0.000001;
-    val documents = sc.wholeTextFiles("hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat",300).flatMap(a => a._2.split("\n")).zipWithIndex().map(cur =>
+    val documents = sc.wholeTextFiles("ap/ap.dat",300).flatMap(a => a._2.split("\n")).zipWithIndex() .map(cur =>
     {
       val doc = cur._1
       val doc_id = cur._2
@@ -82,48 +93,47 @@ object LDA {
     val gamma = DenseMatrix.rand[Double](D,K);
     var alpha = DenseVector.rand[Double](K) // MR.LDA uses 0.001
     val sufficientStats = DenseVector.zeros[Double](K)
-
+    println("BEGIN");
     for(global_iteration <- 0 until MAX_GLOBAL_ITERATION) {
       val t0 = System.currentTimeMillis()
       val result = documents.flatMap(cur => {
         val document = cur._1
         val cur_doc = cur._2.toInt
         val phi = DenseMatrix.zeros[Double](V, K);
-        val emit = new java.util.HashMap[(Int, Int), Double]
+        var emit = List[((Int, Int), Double)]()
         for (iter <- 0 until GAMMA_CONV_ITER) {
           val sigma = DenseVector.zeros[Double](K)
           for (word_ind <- 0 until document.length) {
             //val el = document(word_ind).split(":");
             val v = document(word_ind)._1
             val count = document(word_ind)._2;
-
+            phi(v,::) := (lambda(v,::).t :* exp(digamma(gamma(cur_doc,::).t))).t
+            /*
             for (k <- 0 until K) {
-              phi(v, k) = lambda(v, k) * Math.exp(Gamma.digamma(gamma(cur_doc, k)));
+              phi(v, k) = lambda(v, k) * exp(digamma(gamma(cur_doc, k)));
             }
+            */
             //normalize rows of phi
             val v_norm = phi(v, ::).t.norm()
             phi(v, ::) := phi(v, ::) :* (1 / v_norm);
-            sigma :+= sigma + (phi(v, ::) :* (count)).t;
+            sigma :+= sigma + (phi(v, ::) :* (count/v_norm)).t;
           }
           gamma(cur_doc, ::) := (alpha + sigma).t;
+          println("LOCAL ITERATION:-----------------DOC:" + cur_doc + " ITER:" + iter);
         }
         for (k <- 0 until K) {
-          for (word_ind <- 0 until document.length) {
+          for (word_ind <- 0 until document.length){//document.length) {
             //var el = document(word_ind).split(":");
             val v = document(word_ind)._1;
             val count = document(word_ind)._2 ;
-            if(emit.contains((k,v)))
-              emit.update((k,v), emit.get((k,v)) + count*phi(v,k));
-              //emit((k,v)) = emit.get((k,v)) + count * phi(v, k);
-          else
-              emit.put((k,v), count*phi(v,k))
-              //emit = emit +:((k, v), count * phi(v, k))
+            emit = emit.+:((k, v), count * phi(v, k))
           }
           val suff_stat = Gamma.digamma(gamma(cur_doc, k)) - Gamma.digamma((sum(gamma(cur_doc, ::).t)))
-          emit.put((k,DELTA), suff_stat)
+          emit = emit.+:((k, DELTA), suff_stat)
           //emit = emit.+:((k, DELTA), suff_stat)
         }
         emit
+
       }).reduceByKey(_ + _)
         .collect() //driver
         .foreach(f => {
