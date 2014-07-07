@@ -2,7 +2,7 @@ import java.net.URI
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.io.SequenceFile.Writer
+import org.apache.hadoop.io.SequenceFile.{CompressionType, Writer}
 import org.apache.hadoop.io.{SequenceFile, Text}
 import org.apache.spark.{SparkConf, SparkContext}
 
@@ -39,7 +39,7 @@ object HtmlToTextConversionApp {
       val key = new Text()
       val value = new Text()
       // TODO: fix deprecation warning
-      val writer: Writer = SequenceFile.createWriter(fs, conf, path, key.getClass(), value.getClass())
+      val writer: Writer = SequenceFile.createWriter(fs, conf, path, key.getClass(), value.getClass(), CompressionType.NONE)
       writer
     }
     processor.foreach(doc => writer.append(doc._1, doc._2))
