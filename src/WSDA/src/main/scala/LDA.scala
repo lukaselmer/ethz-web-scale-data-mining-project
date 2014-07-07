@@ -33,18 +33,9 @@ object LDA {
     new SparkContext(conf)
   }
 
-  def driver() {
-    val sc = createSparkContext()
-    var not_converge = true;
-    while(not_converge) {
-      //normalize columns of lambda
-      performIteration()
-      not_converge = true;
-    }
-  }
   def main(args: Array[String]) {
     val t0 = System.currentTimeMillis()
-    performIteration()
+    performIteration(args)
     val t1 = System.currentTimeMillis()
     println("Elapsed time: " + (t1 - t0) + "ms")
   }
@@ -53,18 +44,18 @@ object LDA {
     try pw.write(s) finally pw.close()
   }
 
-  def performIteration() {
+  def performIteration(args: Array[String]) {
     val sc = createSparkContext();
     val V = 10475; //Vocabulary size
     val K = 20;  //NUMBER OF Topics
     val DELTA = -1;
     val GAMMA_CONV_ITER = 100;
-    val MAX_GLOBAL_ITERATION = 1;//30;
+    val MAX_GLOBAL_ITERATION = 30;
     val ALPHA_CONVERGENCE_THRESHOLD = 0.001;
     val ALPHA_MAX_ITERATION = 1000;
     val ETA = 0.000000000001;
     val DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD = 0.000001;
-    val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/testh/ap.da",300).zipWithIndex().map(cur =>
+    val documents = sc.wholeTextFiles("hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat",300).flatMap(a => a._2.split("\n")).zipWithIndex().map(cur =>
     {
       val doc = cur._1
       val doc_id = cur._2
@@ -77,7 +68,7 @@ object LDA {
       val document = DenseVector.zeros[Double](V)
       elems.drop(1).foreach(e =>
       {
-        var el = e.split(":");
+        var el = e.split(":")
         val index = el(0).toInt
         val count = el(1).toInt;
         document(index) = count
@@ -86,7 +77,6 @@ object LDA {
       Tuple2(elems.drop(1).map(e=> {val params = e.split(":"); Tuple2(params(0).toInt, params(1).toDouble); }),doc_id)
       //Tuple2(document, doc_id)
     }).cache();
-
     val D = documents.count().toInt;
     val lambda = DenseMatrix.rand[Double](V,K);
     val gamma = DenseMatrix.rand[Double](D,K);
