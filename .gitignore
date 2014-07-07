@@ -15,3 +15,4 @@ project/plugins/project/
 # Scala-IDE specific
 .scala_dependencies
 .worksheet
+src/html_to_text_conversion/out
