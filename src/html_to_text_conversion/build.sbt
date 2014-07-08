@@ -9,12 +9,14 @@ scalaVersion := "2.11.1" */
 
 // Spark, Hadoop, Mahout
 
+//libraryDependencies += "org.apache.spark" % "spark-core_2.10" % "1.0.0"
 libraryDependencies += "org.apache.spark" % "spark-core_2.10" % "1.0.0"
 
 libraryDependencies += "org.apache.mahout" % "mahout-core" % "0.9"
 
 libraryDependencies += "org.apache.hadoop" % "hadoop-client" % "2.4.0"
 
+//libraryDependencies += "org.eclipse.jetty.orbit" % "javax.servlet" % "3.0.0.v201112011016" % "container,test,compile" artifacts Artifact("javax.servlet", "jar", "jar")
 
 // WARC file parser
 
@@ -35,3 +37,4 @@ libraryDependencies += "xerces" % "xercesImpl" % "2.11.0"
 resolvers += "Akka Repository" at "http://repo.akka.io/releases/"
 
 resolvers += "boilerpipe-m2-repo" at "http://boilerpipe.googlecode.com/svn/repo/"
+
