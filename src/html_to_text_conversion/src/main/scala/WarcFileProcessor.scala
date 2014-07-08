@@ -16,12 +16,13 @@ class WarcFileProcessor(val content: String) extends Traversable[(Text, Text)] {
         val id = record.getHeader("WARC-TREC-ID").value
         val htmlStream = record.getPayloadContent()
         val text = extractText(htmlStream)
-        f(new Text(id), new Text(text))
+        f(new Text(id), new Text(text + "\n"))
       }
     }
   }
 
   def extractText(stream: InputStream): String = {
+    // TODO: Add some more content, e.g. <meta>-Tag data
     val text = ArticleExtractor.INSTANCE.getText(new InputStreamReader(stream))
     cleanString(text)
   }
