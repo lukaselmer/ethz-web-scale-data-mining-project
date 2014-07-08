@@ -21,8 +21,7 @@ object HtmlToTextConversionApp {
       conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       conf.set("spark.kryo.registrator", "MyRegistrator")
       conf.set("data", "file:///mnt/cw12/cw-data")
-      if(!conf.contains("out")) throw new Exception("Config 'out' is missing! Example: hdfs://host:port/ClueWebConverted")
-      //conf.set("out", "hdfs://host:port/ClueWebConverted")
+      conf.set("out", "hdfs://dco-node121:54310/ClueWebConverted")
     }
     new SparkContext(conf)
   }
