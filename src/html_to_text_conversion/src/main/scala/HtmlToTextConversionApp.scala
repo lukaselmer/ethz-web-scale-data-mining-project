@@ -6,7 +6,16 @@ import org.apache.hadoop.io.SequenceFile.{CompressionType, Writer}
 import org.apache.hadoop.io.{SequenceFile, Text}
 import org.apache.spark.{SparkConf, SparkContext}
 //import org.apache.spark.serializer.KryoSerializer
-import org.jwat.warc.WarcReaderFactory
+//import org.jwat.warc.WarcReaderFactory
+import com.esotericsoftware.kryo.Kryo
+import org.apache.spark.serializer.KryoRegistrator
+import java.io._
+
+class MyRegistrator extends KryoRegistrator {
+  override def registerClasses(kryo: Kryo) {
+    kryo.register(classOf[PrintWriter])
+  }
+}
 
 object HtmlToTextConversionApp {
   def createSparkContext(): SparkContext = {
@@ -22,10 +31,11 @@ object HtmlToTextConversionApp {
       conf.set("spark.executor.memory", "100g");
       conf.set("spark.default.parallelism", "200");
       conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      conf.set("spark.kryo.registrator", "MyRegistrator")
-      conf.set("data", "file:///mnt/cw12/cw-data/*/*/")
-      //conf.set("data", "file:///disk3/user_work/runs/small_dataset/0000tw-00.warc")
-      conf.set("out", "hdfs://dco-node121:54310/ClueWeb12Converted")
+      //conf.set("spark.kryo.registrator", "MyRegistrator")
+      //conf.set("data", "file:///mnt/cw12/cw-data")
+      conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/*")
+      //conf.set("out", "hdfs://dco-node121:54310/ClueWebConverted/")
+      conf.set("out", "/local/home/lzhong/ClueWebConverted/")
     }
 
     new SparkContext(conf)
@@ -37,7 +47,7 @@ object HtmlToTextConversionApp {
     // Debug code: processor.foreach(doc => println(doc._1 + ": " + doc._2))
 
     val writer: Writer = {
-      val uri = outPath + "/"// + inputPath.substring(inputPath.lastIndexOf("data/"))
+      val uri = outPath + "/" + inputPath.substring(inputPath.lastIndexOf("data/"))
       val conf = new Configuration()
       val fs = FileSystem.get(URI.create(uri), conf)
       val path = new Path(uri)
