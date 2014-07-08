@@ -20,7 +20,8 @@ object HtmlToTextConversionApp {
       conf.set("spark.default.parallelism", "200");
       conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       conf.set("spark.kryo.registrator", "MyRegistrator")
-      conf.set("data", "file:///mnt/cw12/cw-data")
+      //conf.set("data", "file:///mnt/cw12/cw-data")
+      conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/0000tw")
       conf.set("out", "hdfs://dco-node121:54310/ClueWebConverted")
     }
     new SparkContext(conf)
