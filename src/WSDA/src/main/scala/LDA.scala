@@ -34,7 +34,7 @@ object LDA {
     new SparkContext(conf)
   }
 
-  def dddigamma(v: Double):Double = {
+  def digamma(v: Double):Double = {
     var x = v;
     x = x + 6;
     var p=1/(x*x);
@@ -55,18 +55,19 @@ object LDA {
     try pw.write(s) finally pw.close()
   }
 
+
   def performIteration(args: Array[String]) {
     val sc = createSparkContext();
     val V = 10475; //Vocabulary size
     val K = 20;  //NUMBER OF Topics
     val DELTA = -1;
-    val GAMMA_CONV_ITER = 100;
-    val MAX_GLOBAL_ITERATION = 30;
+    val GAMMA_CONV_ITER = 50;
+    val MAX_GLOBAL_ITERATION = 10;
     val ALPHA_CONVERGENCE_THRESHOLD = 0.001;
     val ALPHA_MAX_ITERATION = 1000;
     val ETA = 0.000000000001;
     val DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD = 0.000001;
-    val documents = sc.wholeTextFiles("ap/ap.dat",300).flatMap(a => a._2.split("\n")).zipWithIndex() .map(cur =>
+    val documents = sc.wholeTextFiles("hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat",300).flatMap(a => a._2.split("\n")).zipWithIndex() .map(cur =>
     {
       val doc = cur._1
       val doc_id = cur._2
@@ -97,6 +98,7 @@ object LDA {
     for(global_iteration <- 0 until MAX_GLOBAL_ITERATION) {
       val t0 = System.currentTimeMillis()
       val result = documents.flatMap(cur => {
+        val digammaCache = Cache.lruCache(10000);
         val document = cur._1
         val cur_doc = cur._2.toInt
         val phi = DenseMatrix.zeros[Double](V, K);
@@ -107,15 +109,23 @@ object LDA {
             //val el = document(word_ind).split(":");
             val v = document(word_ind)._1
             val count = document(word_ind)._2;
-            phi(v,::) := (lambda(v,::).t :* exp(digamma(gamma(cur_doc,::).t))).t
-            /*
+
             for (k <- 0 until K) {
-              phi(v, k) = lambda(v, k) * exp(digamma(gamma(cur_doc, k)));
+              val digamma_key = gamma(cur_doc,k);
+              if(digammaCache.containsKey(digamma_key)) {
+                //println("key found")
+                phi(v, k) = lambda(v, k) * digammaCache.get(digamma_key)
+              }
+              else {
+                  //println("key not found")
+                  val value = exp(digamma(digamma_key));
+                  digammaCache.put(digamma_key, value);
+                  phi(v, k) = lambda(v, k) * value;
+              }
             }
-            */
             //normalize rows of phi
             val v_norm = phi(v, ::).t.norm()
-            phi(v, ::) := phi(v, ::) :* (1 / v_norm);
+            //phi(v, ::) := phi(v, ::) :* (1 / v_norm);
             sigma :+= sigma + (phi(v, ::) :* (count/v_norm)).t;
           }
           gamma(cur_doc, ::) := (alpha + sigma).t;
@@ -134,7 +144,8 @@ object LDA {
         }
         emit
 
-      }).reduceByKey(_ + _)
+      })
+      .reduceByKey(_ + _)
         .collect() //driver
         .foreach(f => {
         if (f._1._2 != DELTA)
@@ -142,7 +153,6 @@ object LDA {
         else
           sufficientStats(f._1._1) = f._2;
       })
-
       //row normalize lambda
       val norm = sum(lambda, Axis._1)
       for (v <- 0 until V) {
