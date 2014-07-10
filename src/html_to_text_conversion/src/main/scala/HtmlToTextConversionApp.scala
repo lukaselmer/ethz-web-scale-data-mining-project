@@ -11,11 +11,6 @@ import com.esotericsoftware.kryo.Kryo
 import org.apache.spark.serializer.KryoRegistrator
 import java.io._
 
-class MyRegistrator extends KryoRegistrator {
-  override def registerClasses(kryo: Kryo) {
-    kryo.register(classOf[PrintWriter])
-  }
-}
 
 object HtmlToTextConversionApp {
   def createSparkContext(): SparkContext = {
@@ -30,8 +25,6 @@ object HtmlToTextConversionApp {
     } else {
       conf.set("spark.executor.memory", "100g");
       conf.set("spark.default.parallelism", "200");
-      conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      //conf.set("spark.kryo.registrator", "MyRegistrator")
       //conf.set("data", "file:///mnt/cw12/cw-data")
       conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/*")
       //conf.set("out", "hdfs://dco-node121:54310/ClueWebConverted/")
