@@ -23,7 +23,7 @@ object HtmlToTextConversionApp {
     } else {
       conf.set("spark.executor.memory", "100g");
       conf.set("spark.default.parallelism", "200");
-      conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/*")
+      conf.set("data", "file:///mnt/cw12/cw-data/ClueWeb12_00/*")
       conf.set("out", "hdfs://dco-node121:54310/ClueWebConverted/ClueWeb12_00")
       //conf.set("out", "/disk3/user_work/runs/convert_all2")
     }
