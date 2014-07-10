@@ -60,7 +60,7 @@ object LDA {
     val ALPHA_MAX_ITERATION = 1000;
     val ETA = 0.000000000001;
     val DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD = 0.000001;
-    val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat",300).flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
+    val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat",300).flatMap(a => a.split("\n")).zipWithIndex().repartition(300).map(cur =>
     {
       val doc = cur._1
       val doc_id = cur._2
@@ -74,7 +74,7 @@ object LDA {
     val D = documents.count().toInt;
     var alpha = DenseVector.fill[Double](K){0.1} // MR.LDA uses 0.001
     //val lambda = DenseMatrix.rand[Double](V,K);
-    val lambda = DenseMatrix.fill[Double](V,K){ Math.random() / Math.random() + V };
+    var lambda = DenseMatrix.fill[Double](V,K){ Math.random() / Math.random() + V };
     val gamma = DenseMatrix.fill[Double](D,K){0.1 + V/K };
     //val gamma = DenseMatrix.rand[Double](D,K);
     val sufficientStats = DenseVector.zeros[Double](K)
@@ -140,11 +140,12 @@ object LDA {
       }
       */
       //column normalize lambda
-      val norm = sum(lambda, Axis._0)
+      lambda = lambda.t;
+      val norm = sum(lambda, Axis._1)
       for (k <- 0 until K) {
-        lambda(::, k) := lambda(::, k) :* (1 / norm(k));
+        lambda(k, ::) := lambda(k, ::) :* (1 / norm(k));
       }
-
+      lambda = lambda.t;
       //Update alpha
       var keepGoing = true;
       var alphaIteration_count = 0;
