@@ -50,6 +50,7 @@ object HtmlToTextConversionApp {
       writer
     }
     processor.foreach(doc => writer.append(doc._1, doc._2))
+    writer.close()
   }
 
   def main(args: Array[String]) {
