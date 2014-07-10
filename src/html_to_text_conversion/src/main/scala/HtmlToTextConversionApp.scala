@@ -53,7 +53,7 @@ object HtmlToTextConversionApp {
   def main(args: Array[String]) {
     val sc = createSparkContext()
     val logFile = sc.getConf.get("data")
-    val files = sc.wholeTextFiles(logFile)
+    val files = sc.wholeTextFiles(logFile, 500)
     val out = sc.getConf.get("out")
     files.foreach(f => processWarcFile(out, f._1, f._2))
   }
