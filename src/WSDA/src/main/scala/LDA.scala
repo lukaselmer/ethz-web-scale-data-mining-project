@@ -60,7 +60,7 @@ object LDA {
     val ALPHA_MAX_ITERATION = 1000;
     val ETA = 0.000000000001;
     val DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD = 0.000001;
-    val documents = sc.wholeTextFiles("ap/ap.dat",300).flatMap(a => a._2.split("\n")).zipWithIndex().repartition(300).map(cur =>
+    val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat",300).flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
     {
       val doc = cur._1
       val doc_id = cur._2
