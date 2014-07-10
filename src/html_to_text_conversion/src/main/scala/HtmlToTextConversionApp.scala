@@ -21,8 +21,8 @@ object HtmlToTextConversionApp {
       conf.set("data", "data/example*")
       conf.set("out", "out")
     } else {
-      conf.set("data", "file:///mnt/cw12/cw-data/ClueWeb12_00/*")
-      conf.set("out", "hdfs://dco-node121:54310/ClueWebConverted/ClueWeb12_00")
+      conf.set("data", "file:///mnt/cw12/cw-data/*")
+      conf.set("out", "hdfs://dco-node121:54310/ClueWebConverted")
       //conf.set("out", "/disk3/user_work/runs/convert_all2")
     }
 
