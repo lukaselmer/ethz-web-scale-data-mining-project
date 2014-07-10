@@ -4,19 +4,26 @@ import java.text.Normalizer
 import de.l3s.boilerpipe.extractors.ArticleExtractor
 import org.apache.commons.io.IOUtils
 import org.apache.hadoop.io.Text
+import org.apache.log4j.Logger
 import org.jwat.warc.{WarcReaderFactory, WarcRecord}
 
 import scala.collection.JavaConversions._
 
-class WarcFileProcessor(val content: String) extends Traversable[(Text, Text)] {
+class WarcFileProcessor(val content: String, val logger: Logger) extends Traversable[(Text, Text)] {
   override def foreach[U](f: ((Text, Text)) => U): Unit = {
     val reader = WarcReaderFactory.getReader(IOUtils.toInputStream(content))
     for (record: WarcRecord <- reader.iterator()) {
       if (record.getHeader("WARC-Type").value == "response") {
         val id = record.getHeader("WARC-TREC-ID").value
         val htmlStream = record.getPayloadContent()
-        val text = extractText(htmlStream)
-        f(new Text(id), new Text(text + "\n"))
+
+        try {
+          val text = extractText(htmlStream)
+          f(new Text(id), new Text(text + "\n"))
+        } catch {
+          case e: Exception => logger.error("Text extraction of record '" + id + "' failed", e)
+        }
+
       }
     }
   }

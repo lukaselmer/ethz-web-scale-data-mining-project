@@ -4,13 +4,11 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.SequenceFile.{CompressionType, Writer}
 import org.apache.hadoop.io.{SequenceFile, Text}
+import org.apache.log4j.LogManager
 import org.apache.spark.{SparkConf, SparkContext}
+
 //import org.apache.spark.serializer.KryoSerializer
 //import org.jwat.warc.WarcReaderFactory
-import com.esotericsoftware.kryo.Kryo
-import org.apache.spark.serializer.KryoRegistrator
-import java.io._
-
 
 object HtmlToTextConversionApp {
   def createSparkContext(): SparkContext = {
@@ -28,14 +26,15 @@ object HtmlToTextConversionApp {
       //conf.set("data", "file:///mnt/cw12/cw-data")
       conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/*")
       //conf.set("out", "hdfs://dco-node121:54310/ClueWebConverted/")
-      conf.set("out", "/local/home/lzhong/ClueWebConverted/")
+      conf.set("out", "/local/home/lzhong/ClueWebConverted")
     }
 
     new SparkContext(conf)
   }
 
   def processWarcFile(outPath: String, inputPath: String, contents: String) {
-    val processor = new WarcFileProcessor(contents)
+    val logger = LogManager.getLogger("WarcFileProcessor")
+    val processor = new WarcFileProcessor(contents, logger)
 
     // Debug code: processor.foreach(doc => println(doc._1 + ": " + doc._2))
 
