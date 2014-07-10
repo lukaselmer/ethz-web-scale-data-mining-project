@@ -18,7 +18,7 @@ object HtmlToTextConversionApp {
 
     if (!conf.contains("spark.master")) {
       conf.setMaster("local[*]")
-      conf.set("data", "data/example1.warc2")
+      conf.set("data", "data/example*")
       conf.set("out", "out")
     } else {
       conf.set("spark.executor.memory", "100g");
