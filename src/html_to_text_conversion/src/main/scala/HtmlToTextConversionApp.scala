@@ -34,6 +34,9 @@ object HtmlToTextConversionApp {
 
     // Debug code: processor.foreach(doc => println(doc._1 + ": " + doc._2))
 
+    logger.error("Testing the error logging configuration...")
+    return
+
     val writer: Writer = {
       val uri = outPath + "/" + inputPath.substring(inputPath.lastIndexOf("data/"))
       val conf = new Configuration()
