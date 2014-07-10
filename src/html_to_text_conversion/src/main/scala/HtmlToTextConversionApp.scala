@@ -26,7 +26,7 @@ object HtmlToTextConversionApp {
       //conf.set("data", "file:///mnt/cw12/cw-data")
       conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/*")
       //conf.set("out", "hdfs://dco-node121:54310/ClueWebConverted/")
-      conf.set("out", "/local/home/lzhong/ClueWebConverted")
+      conf.set("out", "/disk3/user_work/runs/convert_all2")
     }
 
     new SparkContext(conf)
