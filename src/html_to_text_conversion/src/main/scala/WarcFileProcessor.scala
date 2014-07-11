@@ -21,7 +21,8 @@ class WarcFileProcessor(val content: String, val logger: Logger) extends Travers
           val text = extractText(htmlStream)
           f(new Text(id), new Text(text + "\n"))
         } catch {
-          case e: Exception => logger.error("Text extraction of record '" + id + "' failed", e)
+          case e: Exception => logger.error("Exception processing record: " + id)
+          case e: StackOverflowError => logger.error("StackOverflowError processing record: " + id)
         }
 
       }

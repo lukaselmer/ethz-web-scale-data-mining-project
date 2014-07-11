@@ -21,12 +21,8 @@ object HtmlToTextConversionApp {
       conf.set("data", "data/example*")
       conf.set("out", "out")
     } else {
-      conf.set("spark.executor.memory", "100g");
-      conf.set("spark.default.parallelism", "200");
-      //conf.set("data", "file:///mnt/cw12/cw-data")
-      conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/*")
-      //conf.set("out", "hdfs://dco-node121:54310/ClueWebConverted/")
-      conf.set("out", "/local/home/lzhong/ClueWebConverted")
+      conf.set("data", "file:///mnt/cw12/cw-data/*/*")
+      conf.set("out", "hdfs://dco-node121:54310/ClueWebConverted")
     }
 
     new SparkContext(conf)
@@ -56,7 +52,7 @@ object HtmlToTextConversionApp {
   def main(args: Array[String]) {
     val sc = createSparkContext()
     val logFile = sc.getConf.get("data")
-    val files = sc.wholeTextFiles(logFile)
+    val files = sc.wholeTextFiles(logFile, 500)
     val out = sc.getConf.get("out")
     files.foreach(f => processWarcFile(out, f._1, f._2))
   }
