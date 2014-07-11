@@ -40,17 +40,18 @@ object LDA {
 
   def main(args: Array[String]) {
     val t0 = System.currentTimeMillis()
-    performIteration(args)
+    computeTopics(args)
     val t1 = System.currentTimeMillis()
     println("Elapsed time: " + (t1 - t0) + "ms")
   }
+
   def writeToFile(p: String, s: String): Unit = {
     val pw = new PrintWriter(new File(p))
     try pw.write(s) finally pw.close()
   }
 
 
-  def performIteration(args: Array[String]) {
+  def computeTopics(args: Array[String]) {
     val sc = createSparkContext();
     val V = 10475; //Vocabulary size
     val K = 20;  //NUMBER OF Topics
@@ -61,7 +62,8 @@ object LDA {
     val ALPHA_MAX_ITERATION = 1000;
     val ETA = 0.000000000001;
     val DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD = 0.000001;
-    //hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat
+
+    //Read vectorized data set
     val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
     {
       val doc = cur._1
@@ -73,14 +75,14 @@ object LDA {
       var counts = Array[Int]();
       Tuple2(elems.drop(1).map(e=> {val params = e.split(":"); Tuple2(params(0).toInt, params(1).toDouble); }),doc_id)
     }).cache();
+
+    //Initialize Variables
     val D = documents.count().toInt;
     var alpha = DenseVector.fill[Double](K){0.1} // MR.LDA uses 0.001
-    //val lambda = DenseMatrix.rand[Double](V,K);
     var lambda = DenseMatrix.fill[Double](V,K){ Math.random() / (Math.random() + V) };
     val gamma = DenseMatrix.fill[Double](D,K){0.1 + V/K };
-    //val gamma = DenseMatrix.rand[Double](D,K);
     val sufficientStats = DenseVector.zeros[Double](K)
-    println("BEGIN");
+
     for(global_iteration <- 0 until MAX_GLOBAL_ITERATION) {
       val t0 = System.currentTimeMillis()
       val result = documents.flatMap(cur => {
@@ -92,7 +94,6 @@ object LDA {
         for (iter <- 0 until GAMMA_CONV_ITER) {
           val sigma = DenseVector.zeros[Double](K)
           for (word_ind <- 0 until document.length) {
-            //val el = document(word_ind).split(":");
             val v = document(word_ind)._1
             val count = document(word_ind)._2;
 
@@ -117,7 +118,6 @@ object LDA {
         }
         for (k <- 0 until K) {
           for (word_ind <- 0 until document.length){//document.length) {
-            //var el = document(word_ind).split(":");
             val v = document(word_ind)._1;
             val count = document(word_ind)._2 ;
             emit = emit.+:((k, v), count * phi(v, k))
@@ -135,14 +135,8 @@ object LDA {
         else
           sufficientStats(f._1._1) = f._2;
       })
-      /*
-      //row normalize lambda
-      val norm = sum(lambda, Axis._1)
-      for (v <- 0 until V) {
-        lambda(v, ::) := lambda(v, ::) :* (1 / norm(v));
-      }
-      */
-      //column normalize lambda
+
+      //normalize columns of lambda
       lambda = lambda.t;
       val norm = sum(lambda, Axis._1)
       for (k <- 0 until K) {
@@ -192,9 +186,5 @@ object LDA {
     }
     val final_output = sc.parallelize(List(lambda.t.toString(1000000,10000010)))
     final_output.saveAsTextFile("hdfs://dco-node121.dco.ethz.ch:54310/output_lda/");
-    //writeToFile("ap/lambda.txt", lambda.toString(V+10, 10000000))
-    //print(lambda.toString(V,K))
-    //val y = 1;
-    //val z = sum(lambda, Axis._1)
   }
 }
