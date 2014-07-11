@@ -1,9 +1,10 @@
 import java.net.URL
 import java.util.regex.Pattern
 import breeze.linalg._
-import breeze.numerics.{exp, digamma}
+import breeze.numerics._
 
 import edu.umd.cloud9.math.Gamma;
+import scala.util.control.Breaks._
 import scala.collection.mutable;
 import scala.math;
 import org.apache.log4j._;
@@ -60,7 +61,8 @@ object LDA {
     val ALPHA_MAX_ITERATION = 1000;
     val ETA = 0.000000000001;
     val DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD = 0.000001;
-    val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat",300).flatMap(a => a.split("\n")).zipWithIndex().repartition(300).map(cur =>
+    //hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat
+    val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
     {
       val doc = cur._1
       val doc_id = cur._2
@@ -74,7 +76,7 @@ object LDA {
     val D = documents.count().toInt;
     var alpha = DenseVector.fill[Double](K){0.1} // MR.LDA uses 0.001
     //val lambda = DenseMatrix.rand[Double](V,K);
-    var lambda = DenseMatrix.fill[Double](V,K){ Math.random() / Math.random() + V };
+    var lambda = DenseMatrix.fill[Double](V,K){ Math.random() / (Math.random() + V) };
     val gamma = DenseMatrix.fill[Double](D,K){0.1 + V/K };
     //val gamma = DenseMatrix.rand[Double](D,K);
     val sufficientStats = DenseVector.zeros[Double](K)
@@ -100,7 +102,7 @@ object LDA {
                 phi(v, k) = lambda(v, k) * digammaCache.get(digamma_key)
               }
               else {
-                  val value = exp(digamma(digamma_key));
+                  val value = exp(Gamma.digamma(digamma_key));
                   digammaCache.put(digamma_key, value);
                   phi(v, k) = lambda(v, k) * value;
               }
@@ -126,6 +128,7 @@ object LDA {
         emit
       })
       .reduceByKey(_ + _)
+        .collect()
         .foreach(f => {
         if (f._1._2 != DELTA)
           lambda(f._1._2, f._1._1) = ETA + f._2
@@ -150,18 +153,32 @@ object LDA {
       var keepGoing = true;
       var alphaIteration_count = 0;
       while (keepGoing) {
-        val gradient = DenseVector.zeros[Double](K)
-        val qq = DenseVector.zeros[Double](K)
+        val gradient = DenseVector.zeros[Double](K);
+        val qq = DenseVector.zeros[Double](K);
         for (i <- 0 until K) {
           gradient(i) = D * (Gamma.digamma(sum(alpha)) - Gamma.digamma(alpha(i))) + sufficientStats(i);
           qq(i) = -1 / (D * Gamma.trigamma(alpha(i)))
         }
         val z_1 = 1 / (D * Gamma.trigamma(sum(alpha)));
         val b = sum(gradient :* qq) / (z_1 + sum(qq));
-        val H_g = (gradient - b) :* qq;
-        val alpha_new = alpha - H_g;
+        var H_g = (gradient - b) :* qq;
+        var alpha_new = alpha;
 
-        val delta_alpha = (alpha_new - alpha) :/ alpha;
+        var decay = 0.0;
+        var keepDecaying = true;
+        while(keepDecaying) {
+          if(any( H_g * Math.pow(0.8, decay)  :> alpha)) {
+              decay = decay + 1;
+          }
+          else
+          {
+              alpha_new = alpha_new - H_g * Math.pow(0.8, decay) ;
+              keepDecaying = false;
+          }
+          if(decay > 11)
+            keepDecaying = false;
+        }
+        val delta_alpha = abs((alpha_new - alpha) :/ alpha);
         keepGoing = false;
         if (any(delta_alpha :> DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD))
           keepGoing = true;
@@ -174,6 +191,7 @@ object LDA {
       println("Elapsed time for iteration: " +global_iteration + "---"  + (t1 - t0) + "ms")
     }
     val final_output = sc.parallelize(List(lambda.t.toString(1000000,10000010)))
+    final_output.saveAsTextFile("hdfs://dco-node121.dco.ethz.ch:54310/output_lda/");
     //writeToFile("ap/lambda.txt", lambda.toString(V+10, 10000000))
     //print(lambda.toString(V,K))
     //val y = 1;
