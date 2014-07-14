@@ -53,7 +53,7 @@ object LDA {
 
   def computeTopics(args: Array[String]) {
     val sc = createSparkContext();
-    val V = 250000; //Vocabulary size
+    val V = 255000; //Vocabulary size
     val K = 20;  //NUMBER OF Topics
     val DELTA = -1;
     val GAMMA_CONV_ITER = 100;
