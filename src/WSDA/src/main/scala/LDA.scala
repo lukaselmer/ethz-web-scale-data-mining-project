@@ -67,8 +67,8 @@ object LDA {
     val logger = LogManager.getLogger("WarcFileProcessor")
 
     //Read vectorized data set
-    val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/ClueWeb_00_Vectorized/*").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
-    //val documents = sc.textFile("ap/docs.txt").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
+    //val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/ClueWeb_00_Vectorized/*").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
+    val documents = sc.textFile("ap/docs_start.txt").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
     {
       val doc = cur._1
       val doc_id = cur._2
@@ -95,7 +95,7 @@ object LDA {
         val document = cur._1
         val cur_doc = cur._2.toInt
         val phi = DenseMatrix.zeros[Double](V, K);
-        var emit = List[((Int, Int), Double)]()
+        var emit = List[((Int, Int), (Double, String))]()
         for (iter <- 0 until GAMMA_CONV_ITER) {
           val sigma = DenseVector.zeros[Double](K)
           for (word_ind <- 0 until document.length) {
@@ -125,15 +125,16 @@ object LDA {
           for (word_ind <- 0 until document.length){//document.length) {
             val v = document(word_ind)._1;
             val count = document(word_ind)._2 ;
-            emit = emit.+:((k, v), count * phi(v, k))
+            //emit = emit.+:((k, v), count * phi(v, k))
           }
           val suff_stat = Gamma.digamma(gamma(cur_doc, k)) - Gamma.digamma((sum(gamma(cur_doc, ::).t)))
           if(suff_stat.isNaN())
           {
-            logger.error("Hit a NAN");
-            logger.error(document.mkString(" "))
+            emit = emit.+:((k, DELTA), (suff_stat, document.mkString(" ")))
           }
-          emit = emit.+:((k, DELTA), suff_stat)
+          else {
+            emit = emit.+:((k, DELTA), (suff_stat,""))
+          }
         }
         emit
       })
