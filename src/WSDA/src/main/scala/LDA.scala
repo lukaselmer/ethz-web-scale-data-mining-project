@@ -53,7 +53,7 @@ object LDA {
 
   def computeTopics(args: Array[String]) {
     val sc = createSparkContext();
-    val V = 10475; //Vocabulary size
+    val V = 250000; //Vocabulary size
     val K = 20;  //NUMBER OF Topics
     val DELTA = -1;
     val GAMMA_CONV_ITER = 100;
@@ -64,7 +64,8 @@ object LDA {
     val DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD = 0.000001;
 
     //Read vectorized data set
-    val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
+    //val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
+    val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/ClueWeb_00_Vocab/*").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
     {
       val doc = cur._1
       val doc_id = cur._2
