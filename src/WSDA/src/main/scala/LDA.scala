@@ -140,6 +140,8 @@ object LDA {
         else
           sufficientStats(f._1._1) = f._2;
       })
+      logger.error(sufficientStats.toString())
+      logger.error(alpha.toString())
 
       //normalize columns of lambda
       lambda = lambda.t;
@@ -188,8 +190,6 @@ object LDA {
       }
       val t1 = System.currentTimeMillis()
       println("Elapsed time for iteration: " +global_iteration + "---"  + (t1 - t0) + "ms")
-      logger.error(alpha.toString())
-      logger.error(sufficientStats.toString())
     }
 
     val final_output = sc.parallelize(List(lambda.t.toString(1000000,10000010)))
