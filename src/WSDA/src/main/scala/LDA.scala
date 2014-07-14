@@ -5,6 +5,7 @@ import breeze.numerics._
 
 import edu.umd.cloud9.math.Gamma;
 import scala.util.control.Breaks._
+import org.apache.log4j.Logger
 import scala.collection.mutable;
 import scala.math;
 import org.apache.log4j._;
@@ -63,9 +64,11 @@ object LDA {
     val ETA = 0.000000000001;
     val DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD = 0.000001;
 
+    val logger = LogManager.getLogger("WarcFileProcessor")
+
     //Read vectorized data set
-    //val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
     val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/ClueWeb_00_Vectorized/*").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
+    //val documents = sc.textFile("ap/ap_sample.dat").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
     {
       val doc = cur._1
       val doc_id = cur._2
@@ -76,6 +79,7 @@ object LDA {
       var counts = Array[Int]();
       Tuple2(elems.drop(1).map(e=> {val params = e.split(":"); Tuple2(params(0).toInt, params(1).toDouble); }),doc_id)
     }).cache();
+    logger.error("Data set read successfully");
 
     //Initialize Variables
     val D = documents.count().toInt;
@@ -184,7 +188,10 @@ object LDA {
       }
       val t1 = System.currentTimeMillis()
       println("Elapsed time for iteration: " +global_iteration + "---"  + (t1 - t0) + "ms")
+      logger.error(alpha.toString())
+      logger.error(sufficientStats.toString())
     }
+
     val final_output = sc.parallelize(List(lambda.t.toString(1000000,10000010)))
     final_output.saveAsTextFile("hdfs://dco-node121.dco.ethz.ch:54310/output_lda/");
   }
