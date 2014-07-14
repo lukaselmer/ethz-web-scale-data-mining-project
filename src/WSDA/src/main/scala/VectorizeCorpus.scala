@@ -16,8 +16,8 @@ object VectorizeCorpus {
     val conf = new SparkConf().setAppName("Simple Application")
     conf.set("spark.executor.memory", "10g");
     conf.set("spark.default.parallelism","200");
-    conf.set("spark.akka.frameSize","200");
-    conf.set("spark.akka.timeout","200");
+    conf.set("spark.akka.frameSize","2000");
+    conf.set("spark.akka.timeout","2000");
     // Master is not set => use local master, and local data
     if (!conf.contains("spark.master")) {
       conf.setMaster("local[*]")
@@ -47,7 +47,7 @@ object VectorizeCorpus {
     if(stem)
       vocab = vocab.map(u => PorterStemmer.stem(u));
 
-    vocab = vocab.filter(v => !v.isEmpty()).distinct().repartition(1);
+    vocab = vocab.filter(v => !v.isEmpty()).distinct();
 
     //Build a hashtable of word_index
     val dictionary = new mutable.HashMap[String, Int];
