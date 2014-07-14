@@ -65,7 +65,7 @@ object LDA {
 
     //Read vectorized data set
     //val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/testh/*.dat").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
-    val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/ClueWeb_00_Vocab/*").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
+    val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/ClueWeb_00_Vectorized/*").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
     {
       val doc = cur._1
       val doc_id = cur._2
