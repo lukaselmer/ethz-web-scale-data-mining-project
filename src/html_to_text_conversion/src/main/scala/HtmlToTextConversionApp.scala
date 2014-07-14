@@ -9,7 +9,9 @@ import org.apache.spark.{SparkConf, SparkContext}
 
 object HtmlToTextConversionApp {
 
-  val successExtension: String = ".success"
+  private val successExtension: String = ".success"
+  private val topDirectoryNameInput: String = "cw-data/"
+  private val topDirectoryNameOutput: String = "ClueWebConverted/"
 
   def main(args: Array[String]) {
     val sc = createSparkContext()
@@ -38,13 +40,14 @@ object HtmlToTextConversionApp {
     new SparkContext(conf)
   }
 
+
   def processWarcFile(outPath: String, inputPath: String) {
     val fs = FileSystem.get(new Configuration())
     val contents = fs.open(new Path(inputPath))
     val logger = LogManager.getLogger("WarcFileProcessor")
     val processor = new WarcFileProcessor(contents, logger)
 
-    val filePath = inputPath.substring(inputPath.lastIndexOf("ClueWeb12/"))
+    val filePath = inputPath.substring(inputPath.lastIndexOf(topDirectoryNameInput)).replaceFirst(topDirectoryNameInput, "")
     val writer: Writer = getFileWriter(outPath + "/" + filePath)
     processor.foreach(doc => writer.append(doc._1, doc._2))
     writer.close()
@@ -67,10 +70,13 @@ object HtmlToTextConversionApp {
   }
 
   def filesToProcess(inputDirectory: String, outputDirectory: String): List[String] = {
+    // TODO: refactor this
     val inputFiles = HadoopFileHelper.listHdfsFiles(new Path(inputDirectory))
-      .map(el => el.substring(el.lastIndexOf("ClueWeb12/"))).filter(el => el.endsWith(".warc"))
+      .map(el => el.substring(el.lastIndexOf(topDirectoryNameInput)).replaceFirst(topDirectoryNameInput, ""))
+      .filter(el => el.endsWith(".warc"))
     val successfulProcessedFiles = HadoopFileHelper.listHdfsFiles(new Path(outputDirectory))
-      .map(el => el.substring(el.lastIndexOf("ClueWeb12/"))).filter(el => el.endsWith(successExtension))
+      .map(el => el.substring(el.lastIndexOf(topDirectoryNameOutput)).replaceFirst(topDirectoryNameOutput, ""))
+      .filter(el => el.endsWith(successExtension))
 
     val filesToProcess = inputFiles.filter(el => !successfulProcessedFiles.contains(el + successExtension))
     filesToProcess.map(f => inputDirectory + "/" + f)
