@@ -68,7 +68,7 @@ object LDA {
 
     //Read vectorized data set
     val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/ClueWeb_00_Vectorized/*").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
-    //val documents = sc.textFile("ap/ap_sample.dat").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
+    //val documents = sc.textFile("ap/docs.txt").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
     {
       val doc = cur._1
       val doc_id = cur._2
@@ -128,11 +128,19 @@ object LDA {
             emit = emit.+:((k, v), count * phi(v, k))
           }
           val suff_stat = Gamma.digamma(gamma(cur_doc, k)) - Gamma.digamma((sum(gamma(cur_doc, ::).t)))
+          if(suff_stat.isNaN())
+          {
+            logger.error("Hit a NAN");
+            logger.error(document.mkString(" "))
+          }
           emit = emit.+:((k, DELTA), suff_stat)
         }
         emit
       })
-      .reduceByKey(_ + _)
+      .groupBy(k=> k._1).count();
+      //result.saveAsTextFile("hdfs://dco-node121.dco.ethz.ch:54310/output_lda/");
+      /*
+      result.reduceByKey(_ + _)
         .collect()
         .foreach(f => {
         if (f._1._2 != DELTA)
@@ -140,6 +148,7 @@ object LDA {
         else
           sufficientStats(f._1._1) = f._2;
       })
+      */
       logger.error(sufficientStats.toString())
       logger.error(alpha.toString())
 
