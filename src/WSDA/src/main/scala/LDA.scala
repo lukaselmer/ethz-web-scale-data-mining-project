@@ -131,7 +131,9 @@ object LDA {
             sigma :+= sigma + (phi(v, ::) :* (count)).t;
             sigma.foreach( s => {
               if(s.isNaN())
-                throw  new Exception("Sigma Exception: Count: " + count + " PHI_V: " + phi(v,::).toString())
+                throw  new Exception("Sigma NAN: Count: " + count + " PHI_V: " + phi(v,::).toString())
+              if(s.isInfinite())
+                throw  new Exception("Sigma Infinite: Count: " + count + " PHI_V: " + phi(v,::).toString())
             });
           }
           gamma(cur_doc, ::) := (alpha + sigma).t;
