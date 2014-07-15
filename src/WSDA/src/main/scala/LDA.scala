@@ -117,7 +117,7 @@ object LDA {
             }
             //normalize rows of phi
             val v_norm = sum(phi(v, ::).t);
-            val old_phi = phi(v, ::);
+            val old_phi = phi(v, ::).copy();
             phi(v, ::) := phi(v, ::) :* (1 / v_norm);
             phi(v,::).t.foreach( s => {
               if(s.isNaN())
@@ -128,12 +128,13 @@ object LDA {
             });
             if(v_norm == 0)
                 throw new Exception("V_NORM Exception");
+            val sigma_org = sigma.copy();
             sigma :+= sigma + (phi(v, ::) :* (count)).t;
             sigma.foreach( s => {
               if(s.isNaN())
-                throw  new Exception("Sigma NAN: Count: " + count + " PHI_V: " + phi(v,::).toString())
+                throw  new Exception("Sigma NAN: Count: " + count + " PHI_V: " + phi(v,::).toString() + " SIGMA_ORG": + sigma_org.toString)
               if(s.isInfinite())
-                throw  new Exception("Sigma Infinite: Count: " + count + " PHI_V: " + phi(v,::).toString())
+                throw  new Exception("Sigma Infinite: Count: " + count + " PHI_V: " + phi(v,::).toString() + " SIGMA_ORG": + sigma_org.toString)
             });
           }
           gamma(cur_doc, ::) := (alpha + sigma).t;
