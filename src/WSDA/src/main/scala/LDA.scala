@@ -52,10 +52,15 @@ object LDA {
   }
 
 
+  /*
+  args:
+  0: Input Path
+  1: OutputPath
+  2: Vocab
+  3: Topics
+   */
   def computeTopics(args: Array[String]) {
     val sc = createSparkContext();
-    val V = 255000; //Vocabulary size
-    val K = 20;  //NUMBER OF Topics
     val DELTA = -1;
     val GAMMA_CONV_ITER = 100;
     val MAX_GLOBAL_ITERATION = 20;
@@ -65,9 +70,13 @@ object LDA {
     val DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD = 0.000001;
 
     val logger = LogManager.getLogger("WarcFileProcessor")
-
+    val HDFS_ROOT = "hdfs://dco-node121.dco.ethz.ch:54310/"
+    val input = HDFS_ROOT + args(0);
+    val output = HDFS_ROOT + args(3);
+    val V = args(1).toInt
+    val K = args(2).toInt
     //Read vectorized data set
-    val documents = sc.textFile("hdfs://dco-node121.dco.ethz.ch:54310/ClueWeb_00_Vectorized/*").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
+    val documents = sc.textFile(input).flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
     //val documents = sc.textFile("ap/docs_start.txt").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
     {
       val doc = cur._1
@@ -79,7 +88,6 @@ object LDA {
       var counts = Array[Int]();
       Tuple2(elems.drop(1).map(e=> {val params = e.split(":"); Tuple2(params(0).toInt, params(1).toDouble); }),doc_id)
     }).cache();
-    logger.error("Data set read successfully");
 
     //Initialize Variables
     val D = documents.count().toInt;
@@ -112,37 +120,15 @@ object LDA {
                   digammaCache.put(digamma_key, value);
                   phi(v, k) = lambda(v, k) * value;
               }
-              if(phi(v,k).isNaN())
-                throw new Exception("Phi Exception: Lambda: " + lambda(v,k) + " digamma_key: " + digamma_key);
             }
             //normalize rows of phi
             val v_norm = sum(phi(v, ::).t);
             val old_phi = phi(v, ::).copy();
             phi(v, ::) := phi(v, ::) :* (1 / v_norm);
-            phi(v,::).t.foreach( s => {
-              if(s.isNaN())
-                throw  new Exception("PHI V is now NAN, NORM: "  + v_norm
-                  + " old phi: " + old_phi.toString
-                  + " LAMBDA: " +  lambda(v,::).t.toString
-                  + " GAMMA: " + gamma(cur_doc, ::).toString);
-            });
-            if(v_norm == 0)
-                throw new Exception("V_NORM Exception");
             val sigma_org = sigma.t.copy();
-            sigma :+= sigma + (phi(v, ::) :* (count)).t;
-            sigma.foreach( s => {
-              if(s.isNaN())
-                throw  new Exception("Sigma NAN: Count: " + count + " PHI_V: " + phi(v,::).toString() + " SIGMA_ORG " + sigma_org.toString())
-              if(s.isInfinite())
-                throw  new Exception("Sigma Infinite: Count: " + count + " PHI_V: " + phi(v,::).toString() + " SIGMA_ORG "  + sigma_org.toString())
-              if(s > 1E10)
-                throw  new Exception("Sigma Grows: Count: " + count + " PHI_V: " + phi(v,::).toString() + " SIGMA_ORG "  + sigma_org.toString())
-              if(s > 1E50)
-                throw  new Exception("Sigma Grows MUCH: Count: " + count + " PHI_V: " + phi(v,::).toString() + " SIGMA_ORG "  + sigma_org.toString())
-            });
+            sigma :+= (phi(v, ::) :* (count)).t;
           }
           gamma(cur_doc, ::) := (alpha + sigma).t;
-          println("LOCAL ITERATION:-----------------DOC:" + cur_doc + " ITER:" + iter);
         }
         for (k <- 0 until K) {
           for (word_ind <- 0 until document.length){//document.length) {
@@ -168,8 +154,6 @@ object LDA {
         else
           sufficientStats(f._1._1) = f._2;
       })
-      logger.error(sufficientStats.toString())
-      logger.error(alpha.toString())
 
       //normalize columns of lambda
       lambda = lambda.t;
@@ -221,6 +205,6 @@ object LDA {
     }
 
     val final_output = sc.parallelize(List(lambda.t.toString(1000000,10000010)))
-    final_output.saveAsTextFile("hdfs://dco-node121.dco.ethz.ch:54310/output_lda/");
+    final_output.saveAsTextFile(output);
   }
 }
