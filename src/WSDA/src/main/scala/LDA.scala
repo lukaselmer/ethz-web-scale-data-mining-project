@@ -128,13 +128,17 @@ object LDA {
             });
             if(v_norm == 0)
                 throw new Exception("V_NORM Exception");
-            val sigma_org = sigma.copy();
+            val sigma_org = sigma.t.copy();
             sigma :+= sigma + (phi(v, ::) :* (count)).t;
             sigma.foreach( s => {
               if(s.isNaN())
-                throw  new Exception("Sigma NAN: Count: " + count + " PHI_V: " + phi(v,::).toString() + " SIGMA_ORG": + sigma_org.toString)
+                throw  new Exception("Sigma NAN: Count: " + count + " PHI_V: " + phi(v,::).toString() + " SIGMA_ORG " + sigma_org.toString())
               if(s.isInfinite())
-                throw  new Exception("Sigma Infinite: Count: " + count + " PHI_V: " + phi(v,::).toString() + " SIGMA_ORG": + sigma_org.toString)
+                throw  new Exception("Sigma Infinite: Count: " + count + " PHI_V: " + phi(v,::).toString() + " SIGMA_ORG "  + sigma_org.toString())
+              if(s > 1E10)
+                throw  new Exception("Sigma Grows: Count: " + count + " PHI_V: " + phi(v,::).toString() + " SIGMA_ORG "  + sigma_org.toString())
+              if(s > 1E50)
+                throw  new Exception("Sigma Grows MUCH: Count: " + count + " PHI_V: " + phi(v,::).toString() + " SIGMA_ORG "  + sigma_org.toString())
             });
           }
           gamma(cur_doc, ::) := (alpha + sigma).t;
