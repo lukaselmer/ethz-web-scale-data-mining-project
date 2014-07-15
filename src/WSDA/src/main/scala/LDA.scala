@@ -117,10 +117,14 @@ object LDA {
             }
             //normalize rows of phi
             val v_norm = sum(phi(v, ::).t);
+            val old_phi = phi(v, ::);
             phi(v, ::) := phi(v, ::) :* (1 / v_norm);
-            phi(v,::).foreach( s => {
+            phi(v,::).t.foreach( s => {
               if(s.isNaN())
-                throw  new Exception("PHI V is now NAN, NORM: "  + v_norm);
+                throw  new Exception("PHI V is now NAN, NORM: "  + v_norm
+                  + " old phi: " + old_phi.toString
+                  + " LAMBDA: " +  lambda(v,::).t.toString
+                  + " GAMMA: " + gamma(cur_doc, ::).toString);
             });
             if(v_norm == 0)
                 throw new Exception("V_NORM Exception");
