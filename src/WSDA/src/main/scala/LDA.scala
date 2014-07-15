@@ -118,6 +118,10 @@ object LDA {
             //normalize rows of phi
             val v_norm = sum(phi(v, ::).t);
             phi(v, ::) := phi(v, ::) :* (1 / v_norm);
+            phi(v,::).foreach( s => {
+              if(s.isNaN())
+                throw  new Exception("PHI V is now NAN, NORM: "  + v_norm);
+            });
             if(v_norm == 0)
                 throw new Exception("V_NORM Exception");
             sigma :+= sigma + (phi(v, ::) :* (count)).t;
