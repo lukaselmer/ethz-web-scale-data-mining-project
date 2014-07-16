@@ -38,7 +38,7 @@ object VectorizeCorpus {
     val HDFS_ROOT = "hdfs://dco-node121.dco.ethz.ch:54310/"
     val input = HDFS_ROOT + args(0)
     val stem = args(1).toBoolean
-    val vocabOutput = args(2)
+    val vocabOutput = HDFS_ROOT + args(2)
     val output = HDFS_ROOT + args(3)
     val sc = createSparkContext();
     //Read vectorized data set
@@ -74,9 +74,9 @@ object VectorizeCorpus {
     if(stem)
       files = files
                 .map(k => (k._1, PorterStemmer.stem(k._2)))
-                .filter(u => !u._2.isEmpty());
 
     val word_counts = files
+                      .filter(u => !u._2.isEmpty())
                       .map(k => (k._1, dictionary.get(k._2)))
                       .map(k => ( k, 1)).reduceByKey(_ + _);
 
