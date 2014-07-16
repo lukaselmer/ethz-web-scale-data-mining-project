@@ -35,10 +35,11 @@ object VectorizeCorpus {
   }
 
   def buildVocabulary(args: Array[String]) {
-    val input = args(0)
+    val HDFS_ROOT = "hdfs://dco-node121.dco.ethz.ch:54310/"
+    val input = HDFS_ROOT + args(0)
     val stem = args(1).toBoolean
     val vocabOutput = args(2)
-    val output = args(3)
+    val output = HDFS_ROOT + args(3)
     val sc = createSparkContext();
     //Read vectorized data set
     var vocab = sc.sequenceFile[String, String](input)
@@ -52,11 +53,19 @@ object VectorizeCorpus {
     //Build a hashtable of word_index
     val dictionary = new mutable.HashMap[String, Int];
     var index = 0;
-    vocab.collect().foreach(u =>
-      {
+    val words = vocab;//.collect();
+    val parts = words.partitions;
+
+    for (p <- parts) {
+      val idx = p.index
+      val partRdd = words.mapPartitionsWithIndex((ind,iter) => if(ind == idx) iter else Iterator(), true);
+      val data = partRdd.collect //data contains all values from a single partition
+      data.foreach(u => {
         dictionary.put(u, index);
         index += 1;
-      });
+      })
+    }
+
     val saved_dictionary = dictionary.toList;
     sc.parallelize(saved_dictionary, 1).saveAsTextFile(vocabOutput);
     sc.broadcast(dictionary);
