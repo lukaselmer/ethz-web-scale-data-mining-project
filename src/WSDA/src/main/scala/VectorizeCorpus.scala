@@ -1,6 +1,8 @@
 import java.net.URL
 import java.util.regex.Pattern
-import edu.umd.cloud9.math.Gamma;
+import edu.umd.cloud9.math.Gamma
+import org.apache.log4j.LogManager
+;
 import scala.collection.mutable
 ;
 import scala.math;
@@ -35,6 +37,8 @@ object VectorizeCorpus {
   }
 
   def buildVocabulary(args: Array[String]) {
+    val logger = LogManager.getLogger("Vectorize Corpus")
+
     val HDFS_ROOT = "hdfs://dco-node121.dco.ethz.ch:54310/"
     val input = HDFS_ROOT + args(0)
     val stem = args(1).toBoolean
@@ -55,6 +59,8 @@ object VectorizeCorpus {
     var index = 0;
     val words = vocab;//.collect();
     val parts = words.partitions;
+
+    logger.error("NUMBER OF PARTITIONS: " + parts.length);
 
     for (p <- parts) {
       val idx = p.index
