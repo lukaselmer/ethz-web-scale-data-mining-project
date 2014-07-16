@@ -53,7 +53,6 @@ object VectorizeCorpus {
       vocab = vocab.map(u => PorterStemmer.stem(u));
 
     vocab = vocab.filter(v => !v.isEmpty()).distinct();
-    vocab.collect();
     val vocabSize = vocab.count();
     //Build a hashtable of word_index
     val dictionary = new mutable.HashMap[String, Int];
