@@ -1,5 +1,4 @@
 import java.io.{InputStream, InputStreamReader}
-import java.text.Normalizer
 
 import de.l3s.boilerpipe.extractors.ArticleExtractor
 import org.apache.hadoop.io.Text
@@ -31,16 +30,6 @@ class WarcFileProcessor(val content: InputStream, val logger: Logger) extends Tr
   def extractText(stream: InputStream): String = {
     // TODO: Add some more content, e.g. <meta>-Tag data
     val text = ArticleExtractor.INSTANCE.getText(new InputStreamReader(stream))
-    cleanString(text)
-  }
-
-  def cleanString(text: String): String = {
-    new String(Normalizer.normalize(text.replaceAll("’|'|`|´|\"", ""), Normalizer.Form.NFKD).getBytes("ascii"), "ascii")
-      .toLowerCase()
-      .replaceAll("’|'|`|´|\"", "")
-      .replaceAll("[^a-zA-Z0-9]+", " ")
-      .replaceAll("\\s+", " ")
-      .replaceAll("\\b\\w{1,2}\\b\\s?", " ")
-      .replaceAll("\\s+", " ")
+    TextProcessor.cleanString(text)
   }
 }
