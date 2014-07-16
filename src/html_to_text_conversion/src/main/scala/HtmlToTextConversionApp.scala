@@ -19,6 +19,7 @@ object HtmlToTextConversionApp {
     val outputDirectory = sc.getConf.get("output")
     val files = filesToProcess(inputDirectory, outputDirectory)
     sc.parallelize(files, 10000).foreach(f => processWarcFile(outputDirectory, f))
+    // Local machine, for debugging: files.foreach(f => processWarcFile(outputDirectory, f))
   }
 
   def createSparkContext(): SparkContext = {
@@ -28,8 +29,9 @@ object HtmlToTextConversionApp {
     if (!conf.contains("spark.master")) {
       conf.set("local", "false")
       conf.setMaster("local[*]")
-      conf.set("input", "data")
+      conf.set("input", "data/cw-data")
       conf.set("output", "out")
+      scala.reflect.io.Path("out/ClueWeb12_00").deleteRecursively()
     } else {
       conf.set("local", "true")
       //conf.set("input", "file:///mnt/cw12/cw-data")

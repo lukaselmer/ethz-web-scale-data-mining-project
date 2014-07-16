@@ -1,5 +1,4 @@
 import java.io.StringReader
-import java.text.Normalizer
 import java.util.regex.Pattern
 
 import org.apache.lucene.analysis.TokenStream
@@ -14,16 +13,31 @@ import scala.collection.mutable
 object TextProcessor {
   val stopWords = initStopWords()
   val analyzer: EnglishAnalyzer = new EnglishAnalyzer(Version.LUCENE_46, stopWords)
-  val regex1 = Pattern.compile("\\b(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]", Pattern.CASE_INSENSITIVE)
-  val regex2 = Pattern.compile("[^a-zA-Z][0-9]+[^a-zA-Z]", Pattern.CASE_INSENSITIVE)
-  val regex3 = Pattern.compile("[^a-zA-Z0-9 ]+", Pattern.CASE_INSENSITIVE)
+  val regexPreprocessing = Pattern.compile(
+    // valid urls
+    "(\\b(https?|ftp|file)://[-a-z0-9+&@#/%?=~_|!:,.;]*[-a-z0-9+&@#/%=~_|])|" +
+      // only links like www.google.com or www.google.com/?woaejf=gerjni
+      "(\\b[a-z0-9]+\\.[a-z0-9]+[^\\s]*\\b)|" +
+      // All the numbers
+      "([0-9])+|" +
+      // All escaped sequences
+      "(\\&[a-z0-9]+;)",
+    Pattern.CASE_INSENSITIVE)
+  val regexPostprocessing1ReplaceWithSpace = Pattern.compile("\\p{Punct}", Pattern.CASE_INSENSITIVE)
+  val regexPostprocessing2DeleteMatches = Pattern.compile("(\\b([^a-z ]|[a-z])*[^a-z ]+([^a-z ]|[a-z])*\\b)|(\\b\\w{1,2}\\b)", Pattern.CASE_INSENSITIVE)
+  val regexPostprocessing3 = Pattern.compile("\\s+", Pattern.CASE_INSENSITIVE)
 
   def cleanString(text: String): String = {
-    val preprocessedText = regex2.matcher(regex1.matcher(text).replaceAll("")).replaceAll("")
+    val preprocessedText = regexPreprocessing.matcher(text).replaceAll("")
     val stream = analyzer.tokenStream("contents", new StringReader(preprocessedText))
     val str = tokenStreamToString(stream)
-    regex3.matcher(new String(Normalizer.normalize(str, Normalizer.Form.NFKD).getBytes("ascii"), "ascii")).
-      replaceAll("").replaceAll("\\s+", " ").trim
+    regexPostprocessing3.matcher(
+      regexPostprocessing2DeleteMatches.matcher(
+        regexPostprocessing1ReplaceWithSpace.matcher(str).replaceAll(" ")
+      ).replaceAll(" ")
+    ).replaceAll(" ").trim
+    // new String(Normalizer.normalize(str, Normalizer.Form.NFKD).getBytes("ascii"), "ascii")
+
   }
 
   private def tokenStreamToString(stream: TokenStream): String = {
