@@ -13,16 +13,18 @@ class WarcFileProcessor(val content: InputStream, val logger: Logger) extends Tr
     for (record: WarcRecord <- reader.iterator()) {
       if (record.getHeader("WARC-Type").value == "response") {
         val id = record.getHeader("WARC-TREC-ID").value
-        val htmlStream = record.getPayloadContent()
+        if (id == "clueweb12-0000tw-43-22879") {
 
-        try {
-          val text = extractText(htmlStream)
-          f(new Text(id), new Text(text + "\n"))
-        } catch {
-          case e: Exception => logger.error("Exception processing record: " + id)
-          case e: StackOverflowError => logger.error("StackOverflowError processing record: " + id)
+          val htmlStream = record.getPayloadContent()
+
+          try {
+            val text = extractText(htmlStream)
+            f(new Text(id), new Text(text + "\n"))
+          } catch {
+            case e: Exception => logger.error("Exception processing record: " + id)
+            case e: StackOverflowError => logger.error("StackOverflowError processing record: " + id)
+          }
         }
-
       }
     }
   }
