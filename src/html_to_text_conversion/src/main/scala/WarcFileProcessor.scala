@@ -7,23 +7,19 @@ import org.jwat.warc.{WarcReaderFactory, WarcRecord}
 
 import scala.collection.JavaConversions._
 
-class WarcFileProcessor(val content: InputStream, val logger: Logger) extends Traversable[(Text, Text)] {
+class WarcFileProcessor(val contentStream: InputStream, val logger: Logger) extends Traversable[(Text, Text)] {
   override def foreach[U](f: ((Text, Text)) => U): Unit = {
-    val reader = WarcReaderFactory.getReader(content)
+    val reader = WarcReaderFactory.getReader(contentStream)
     for (record: WarcRecord <- reader.iterator()) {
       if (record.getHeader("WARC-Type").value == "response") {
         val id = record.getHeader("WARC-TREC-ID").value
-        if (id == "clueweb12-0000tw-43-22879") {
-
-          val htmlStream = record.getPayloadContent()
-
-          try {
-            val text = extractText(htmlStream)
-            f(new Text(id), new Text(text + "\n"))
-          } catch {
-            case e: Exception => logger.error("Exception processing record: " + id)
-            case e: StackOverflowError => logger.error("StackOverflowError processing record: " + id)
-          }
+        val htmlStream = record.getPayloadContent()
+        try {
+          val text = extractText(htmlStream)
+          f(new Text(id), new Text(text + "\n"))
+        } catch {
+          case e: Exception => logger.error("Exception processing record: " + id, e)
+          case e: StackOverflowError => logger.error("StackOverflowError processing record: " + id, e)
         }
       }
     }

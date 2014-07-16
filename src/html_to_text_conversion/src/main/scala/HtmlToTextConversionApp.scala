@@ -11,15 +11,19 @@ object HtmlToTextConversionApp {
 
   private val successExtension: String = ".success"
   private val topDirectoryNameInput: String = "cw-data/"
-  private val topDirectoryNameOutput: String = "ClueWebConverted/"
+  private val topDirectoryNameOutput: String = "ClueWebConvertedClean2/"
 
   def main(args: Array[String]) {
     val sc = createSparkContext()
     val inputDirectory = sc.getConf.get("input")
     val outputDirectory = sc.getConf.get("output")
     val files = filesToProcess(inputDirectory, outputDirectory)
-    sc.parallelize(files, 10000).foreach(f => processWarcFile(outputDirectory, f))
-    // Local machine, for debugging: files.foreach(f => processWarcFile(outputDirectory, f))
+    val processWarcFileFunction = (filename: String) => processWarcFile(outputDirectory, filename)
+
+    if (sc.getConf.getBoolean("local", false))
+      files.foreach(processWarcFileFunction)
+    else
+      sc.parallelize(files, 10000).foreach(processWarcFileFunction)
   }
 
   def createSparkContext(): SparkContext = {
@@ -27,27 +31,26 @@ object HtmlToTextConversionApp {
 
     // Master is not set => use local master, and local data
     if (!conf.contains("spark.master")) {
-      conf.set("local", "false")
+      conf.set("local", "true")
       conf.setMaster("local[*]")
       conf.set("input", "data/cw-data")
-      conf.set("output", "out")
-      scala.reflect.io.Path("out/ClueWeb12_00").deleteRecursively()
+      conf.set("output", "out/ClueWebConverted")
+      scala.reflect.io.Path("out/ClueWebConverted").deleteRecursively()
+      scala.reflect.io.Path("out/ClueWebConverted").createDirectory(failIfExists = true)
     } else {
-      conf.set("local", "true")
-      //conf.set("input", "file:///mnt/cw12/cw-data")
+      conf.set("local", "false")
       conf.set("input", "hdfs://dco-node121.dco.ethz.ch:54310/cw-data")
-      conf.set("output", "hdfs://dco-node121.dco.ethz.ch:54310/ClueWebConvertedClean")
+      conf.set("output", "hdfs://dco-node121.dco.ethz.ch:54310/ClueWebConvertedClean2")
     }
 
     new SparkContext(conf)
   }
 
-
   def processWarcFile(outPath: String, inputPath: String) {
     val fs = FileSystem.get(new Configuration())
-    val contents = fs.open(new Path(inputPath))
+    val contentStream = fs.open(new Path(inputPath))
     val logger = LogManager.getLogger("WarcFileProcessor")
-    val processor = new WarcFileProcessor(contents, logger)
+    val processor = new WarcFileProcessor(contentStream, logger)
 
     val filePath = inputPath.substring(inputPath.lastIndexOf(topDirectoryNameInput)).replaceFirst(topDirectoryNameInput, "")
     val writer: Writer = getFileWriter(outPath + "/" + filePath)
