@@ -57,22 +57,13 @@ object VectorizeCorpus {
     //Build a hashtable of word_index
     val dictionary = new mutable.HashMap[String, Int];
     var index = 0;
-    val words = vocab;//.collect();
-    val parts = words.partitions;
 
-    logger.error("NUMBER OF PARTITIONS: " + parts.length);
     logger.error("VOCAB Size: " + vocabSize );
 
-    for (p <- parts) {
-      val idx = p.index
-      val partRdd = words.mapPartitionsWithIndex((ind,iter) => if(ind == idx) iter else Iterator(), true);
-      logger.error("Partition: " + idx + " Size: " + partRdd.count());
-      val data = partRdd.collect //data contains all values from a single partition
-      data.foreach(u => {
-        dictionary.put(u, index);
-        index += 1;
-      })
-    }
+    vocab.collect().foreach(u => {
+      dictionary.put(u, index);
+      index += 1;
+    })
 
     val saved_dictionary = dictionary.toList;
     sc.parallelize(saved_dictionary, 1).saveAsTextFile(vocabOutput);
