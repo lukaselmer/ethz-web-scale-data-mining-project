@@ -53,6 +53,7 @@ object VectorizeCorpus {
       vocab = vocab.map(u => PorterStemmer.stem(u));
 
     vocab = vocab.filter(v => !v.isEmpty()).distinct();
+    vocab.collect();
     val vocabSize = vocab.count();
     //Build a hashtable of word_index
     val dictionary = new mutable.HashMap[String, Int];
@@ -66,6 +67,7 @@ object VectorizeCorpus {
     for (p <- parts) {
       val idx = p.index
       val partRdd = words.mapPartitionsWithIndex((ind,iter) => if(ind == idx) iter else Iterator(), true);
+      logger.error("Partition: " + idx + " Size: " + partRdd.count());
       val data = partRdd.collect //data contains all values from a single partition
       data.foreach(u => {
         dictionary.put(u, index);
