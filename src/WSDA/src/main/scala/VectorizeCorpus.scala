@@ -55,21 +55,25 @@ object VectorizeCorpus {
     val output = HDFS_ROOT + args(3)
     val sc = createSparkContext();
     //Read vectorized data set
-    var vocab = sc.sequenceFile[String, String](input)
+    var vocab = sc.sequenceFile[String, String](input+"*/*")
                   .flatMap(a => a._2.split(" "));
 
     if(stem)
       vocab = vocab.map(u => PorterStemmer.stem(u));
 
-    vocab = vocab.filter(v => !v.isEmpty()).distinct();
-    val vocabSize = vocab.count();
+    val vocabFiltered = vocab.filter(v => !v.isEmpty())
+                              .map(w => (w,1))
+                              .reduceByKey(_ + _)
+                              .filter(f=> f._2 > 1)
+                              .map(f => f._1);
+    val vocabSize = vocabFiltered.count();
     //Build a hashtable of word_index
     val dictionary = new mutable.HashMap[String, Int];
     var index = 0;
 
     logger.error("VOCAB Size: " + vocabSize );
 
-    vocab.collect().foreach(u => {
+    vocabFiltered.collect().foreach(u => {
       dictionary.put(u, index);
       index += 1;
     })
@@ -103,7 +107,7 @@ object VectorizeCorpus {
           var cur_word = w;
           if(stem)
             cur_word = PorterStemmer.stem(w);
-          if(!cur_word.isEmpty())
+          if(dictionary.contains(cur_word))
           {
             val word_index = dictionary.get(cur_word).get;
             if(frequency_table.containsKey(word_index))
@@ -117,7 +121,8 @@ object VectorizeCorpus {
           emit = emit + " " + f._1 + ":" + f._2;
         });
         //Append to the writer
-        writer.append(key, emit);
+        if(!emit.toString.isEmpty())
+          writer.append(key, emit);
       }
       writer.close()
       getFileWriter(output + "/" + filePath + successExtension).close()
