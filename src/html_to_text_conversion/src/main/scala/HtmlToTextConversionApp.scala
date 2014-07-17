@@ -1,17 +1,25 @@
 import java.net.URI
 
+import com.google.common.io.Closeables
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.SequenceFile.{CompressionType, Writer}
 import org.apache.hadoop.io.{SequenceFile, Text}
 import org.apache.log4j.LogManager
 import org.apache.spark.{SparkConf, SparkContext}
+import java.io.Closeable
+import scala.util.Random
 
 object HtmlToTextConversionApp {
 
   private val successExtension: String = ".success"
   private val topDirectoryNameInput: String = "cw-data/"
-  private val topDirectoryNameOutput: String = "ClueWebConvertedClean2/"
+  private val topDirectoryNameOutput: String = "test-combine-out/"
+  private val outLoiPath = "hdfs://dco-node121.dco.ethz.ch:54310/test-combine-out"
+  private val fileLength: Integer = 1984 * 1024 * 1024
+  private var currentFileSize: Int = 0
+  private var currentID: Int = 0
+  private var writer: Writer = getFileWriter(outLoiPath + "/" + currentID.toString + "." + Random.nextInt().toString)
 
   def main(args: Array[String]) {
     val sc = createSparkContext()
@@ -24,6 +32,7 @@ object HtmlToTextConversionApp {
       files.foreach(processWarcFileFunction)
     else
       sc.parallelize(files, 10000).foreach(processWarcFileFunction)
+    writer.close()
   }
 
   def createSparkContext(): SparkContext = {
@@ -40,7 +49,7 @@ object HtmlToTextConversionApp {
     } else {
       conf.set("local", "false")
       conf.set("input", "hdfs://dco-node121.dco.ethz.ch:54310/cw-data")
-      conf.set("output", "hdfs://dco-node121.dco.ethz.ch:54310/ClueWebConvertedClean2")
+      conf.set("output", "hdfs://dco-node121.dco.ethz.ch:54310/test-combine-out")
     }
 
     new SparkContext(conf)
@@ -51,13 +60,27 @@ object HtmlToTextConversionApp {
     val contentStream = fs.open(new Path(inputPath))
     val logger = LogManager.getLogger("WarcFileProcessor")
     val processor = new WarcFileProcessor(contentStream, logger)
-
     val filePath = inputPath.substring(inputPath.lastIndexOf(topDirectoryNameInput)).replaceFirst(topDirectoryNameInput, "")
-    val writer: Writer = getFileWriter(outPath + "/" + filePath)
-    processor.foreach(doc => writer.append(doc._1, doc._2))
-    writer.close()
-    getFileWriter(outPath + "/" + filePath + successExtension).close()
+    processor.foreach(doc => write(doc._1, doc._2))
+    getFileWriter(outLoiPath + "/" + filePath + successExtension).close()
+ }
+
+  def write(key: Text, value: Text) {
+    if (currentFileSize > fileLength) {
+      //Closeables.close(writer, false)
+      //writer.close()
+
+      currentFileSize = 0
+      currentID = currentID + 1
+      writer = getFileWriter(outLoiPath + "/" + currentID.toString + "." + Random.nextInt().toString)
+    }
+    else {
+      currentFileSize = currentFileSize + key.getBytes.length + value.getBytes.length
+      print(currentFileSize)
+      writer.append(key, value)
+    }
   }
+
 
   def getFileWriter(outPath: String): Writer = {
     val writer: Writer = {
@@ -76,6 +99,7 @@ object HtmlToTextConversionApp {
 
   def filesToProcess(inputDirectory: String, outputDirectory: String): List[String] = {
     // TODO: refactor this
+    //val InLoiPath = "hdfs://dco-node121.dco.ethz.ch:54310/cw-data"
     val inputFiles = HadoopFileHelper.listHdfsFiles(new Path(inputDirectory))
       .map(el => el.substring(el.lastIndexOf(topDirectoryNameInput)).replaceFirst(topDirectoryNameInput, ""))
       .filter(el => el.endsWith(".warc"))
