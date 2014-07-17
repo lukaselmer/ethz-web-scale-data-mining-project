@@ -167,15 +167,6 @@ object VectorizeCorpus {
     */
   }
 
-  def filesToProcess(inputDirectory: String): List[String] = {
-    // TODO: refactor this
-    val topDirectoryNameInput = "test";
-
-    val inputFiles = HadoopFileHelper.listHdfsFiles(new Path(inputDirectory))
-      .map(el => el.substring(el.lastIndexOf(topDirectoryNameInput)).replaceFirst(topDirectoryNameInput, ""))
-      .filter(el => el.endsWith(".warc"))
-    inputFiles.map(f => inputDirectory + "/" + f)
-  }
 
   def writeToFile(p: String, s: String): Unit = {
     val pw = new PrintWriter(new File(p))
