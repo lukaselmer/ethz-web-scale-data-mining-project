@@ -22,7 +22,7 @@ object CombineSequenceFilesApp {
   }
 
   def createSparkContext(): SparkContext = {
-    val conf = new SparkConf().setAppName("HTML to Text Conversion Application")
+    val conf = new SparkConf().setAppName("Combine Sequence Files Application")
 
     // Master is not set => use local master, and local data
     if (!conf.contains("spark.master")) {
