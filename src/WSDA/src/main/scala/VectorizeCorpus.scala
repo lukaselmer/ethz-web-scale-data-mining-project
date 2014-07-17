@@ -40,8 +40,8 @@ object VectorizeCorpus {
   def buildVocabulary(args: Array[String]) {
     val logger = LogManager.getLogger("Vectorize Corpus")
 
-    //val HDFS_ROOT = "hdfs://dco-node121.dco.ethz.ch:54310/"
-    val HDFS_ROOT = ""
+    val HDFS_ROOT = "hdfs://dco-node121.dco.ethz.ch:54310/"
+    //val HDFS_ROOT = ""
     val input = HDFS_ROOT + args(0)
     val stem = args(1).toBoolean
     val vocabOutput = HDFS_ROOT + args(2)
