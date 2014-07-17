@@ -19,6 +19,8 @@ import scala.collection.JavaConversions._
 import java.io._
 
 object VectorizeCorpus {
+  private val successExtension: String = ".success"
+  private val topDirectoryNameInput: String = "cw-data/"
   def createSparkContext(): SparkContext = {
     val conf = new SparkConf().setAppName("Simple Application")
     //conf.set("spark.executor.memory", "10g");
@@ -75,8 +77,55 @@ object VectorizeCorpus {
     val saved_dictionary = dictionary.toList;
     sc.parallelize(saved_dictionary).saveAsTextFile(vocabOutput);
     sc.broadcast(dictionary);
+
+    val filess = filesToProcess(input, "src")
+    val processWarcFileFunction = (filename: String) => processWarcFile(output, filename)
+    sc.parallelize(filess).foreach(inputPath =>
+    {
+      val fs = FileSystem.get(new Configuration())
+      val last_index = inputPath.lastIndexOf("/")
+      val second_index = inputPath.lastIndexOf("/", last_index-1)
+      val filePath =  inputPath.substring(second_index + 1)
+
+      val conf = new Configuration()
+      val key = new Text()
+      val value = new Text()
+
+      val reader = new SequenceFile.Reader(fs, new Path(inputPath), conf);
+      val writer: Writer = getFileWriter(output+ "/" + filePath)
+      val frequency_table = new mutable.HashMap[Int, Int];
+      while (reader.next(key, value))
+      {
+        var emit = new Text();
+        val content = value.toString().split(" ");
+        content.foreach(w =>
+        {
+          var cur_word = w;
+          if(stem)
+            cur_word = PorterStemmer.stem(w);
+          if(!cur_word.isEmpty())
+          {
+            val word_index = dictionary.get(cur_word).get;
+            if(frequency_table.containsKey(word_index))
+              frequency_table.update(word_index, frequency_table.get(word_index).get + 1);
+            else
+              frequency_table.put(word_index, 1);
+          }
+        });
+
+        frequency_table.foreach(f => {
+          emit = emit + " " + f._1 + ":" + f._2;
+        });
+        //Append to the writer
+        writer.append(key, emit);
+      }
+      writer.close()
+      getFileWriter(output + "/" + filePath + successExtension).close()
+    });
+
     //read
     //var files = sc.sequenceFile[String, String](input).flatMap(f => f._2.split(" ").map(w => (f._1, w)));
+    /*
     val files = sc.sequenceFile[String, String](input);
 
     val parse_files = files.mapPartitionsWithIndex((partitionIndex,partition) => {
@@ -111,66 +160,61 @@ object VectorizeCorpus {
     writeToFile(output + "/" + partitionIndex, output_files.toList.mkString("\n"))
     Iterator();
   });
-    parse_files.count();
-    /*
-    val outputDirectory = sc.getConf.get("output")
-    val filess = filesToProcess(input)
-    val processWarcFileFunction = (filename: String) => processSequenceFile(outputDirectory, filename)
-    sc.parallelize(filess, 10000).foreach(processWarcFileFunction)
+  parse_files.count();
+  */
+  }
 
-    val output_files = files.map(f =>
+  def processWarcFile(outPath: String, inputPath: String) {
+    val fs = FileSystem.get(new Configuration())
+    val contentStream = fs.open(new Path(inputPath))
+
+    val conf = new Configuration()
+    val key = new Text()
+    val value = new Text()
+
+    val reader = new SequenceFile.Reader(fs, new Path(inputPath), conf);
+    while (reader.next(key, value))
     {
-        val file_name = f._1;
-        var emit = file_name;
-        val content = f._2.split(" ");
 
-        val frequency_table = new mutable.HashMap[Int, Int];
+    }
+    //read the file
+    //val processor = new WarcFileProcessor(contentStream, logger)
 
-        content.foreach(w =>
-        {
-          var cur_word = w;
-          if(stem)
-            cur_word = PorterStemmer.stem(w);
-          if(!cur_word.isEmpty())
-          {
-            val word_index = dictionary.get(cur_word).get;
-            if(frequency_table.containsKey(word_index))
-              frequency_table.update(word_index, frequency_table.get(word_index).get + 1);
-            else
-              frequency_table.put(word_index, 1);
-          }
-        });
+    val filePath = inputPath.substring(inputPath.lastIndexOf(topDirectoryNameInput)).replaceFirst(topDirectoryNameInput, "")
+    val writer: Writer = getFileWriter(outPath + "/" + filePath)
+    //processor.foreach(doc => writer.append(doc._1, doc._2))
+    writer.close()
+    getFileWriter(outPath + "/" + filePath + successExtension).close()
+  }
 
-      frequency_table.foreach(f => {
-        emit = emit + " " + f._1 + ":" + f._2;
-      });
-      emit;
-    });
-
-
-      //flatMap(f => f._2.split(" ").map(w => (f._1, w)));
-    /*
-    if(stem)
-      files = files
-                .map(k => (k._1, PorterStemmer.stem(k._2)))
-
-    val word_counts = files
-                      .filter(u => !u._2.isEmpty())
-                      .map(k => (k._1, dictionary.get(k._2)))
-                      .map(k => ( k, 1)).reduceByKey(_ + _);
-
-    val output_files = word_counts
-      .groupBy(a => a._1._1)
-      .map(f => f._1 + " " + f._2.map(u => u._1._2.get + ":" + u._2).mkString(" "));
-    */
-    output_files.saveAsTextFile(output);
-    */
+  def getFileWriter(outPath: String): Writer = {
+    val writer: Writer = {
+      val uri = outPath
+      val conf = new Configuration()
+      val fs = FileSystem.get(URI.create(uri), conf)
+      val path = new Path(uri)
+      val key = new Text()
+      val value = new Text()
+      // TODO: fix deprecation warning
+      val writer: Writer = SequenceFile.createWriter(fs, conf, path, key.getClass(), value.getClass(), CompressionType.NONE)
+      writer
+    }
+    writer
   }
 
 
   def writeToFile(p: String, s: String): Unit = {
     val pw = new PrintWriter(new File(p))
     try pw.write(s) finally pw.close()
+  }
+  def filesToProcess(inputDirectory: String, topDirectoryNameInput: String): List[String] = {
+    var inputFiles = HadoopFileHelper.listHdfsFiles(new Path(inputDirectory));
+    inputFiles
+    /*
+    inputFiles = inputFiles.map(el => el.substring(el.lastIndexOf(topDirectoryNameInput)).replaceFirst(topDirectoryNameInput, ""))
+      .filter(el => el.endsWith(".warc"))
+    inputFiles.map(f => inputDirectory + "/" + f)
+    */
   }
 
 }
