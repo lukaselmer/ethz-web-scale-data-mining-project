@@ -1,3 +1,6 @@
 [submodule "src/WSDA/ap"]
 	path = src/WSDA/ap
 	url = https://github.com/lukaselmer/ap_example_data.git
+[submodule "src/WSDA/src/main/java/de"]
+	path = src/WSDA/src/main/java/de
+	url = https://github.com/lukaselmer/boilerplate_clone.git
