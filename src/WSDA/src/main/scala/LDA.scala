@@ -10,11 +10,9 @@ import scala.collection.mutable;
 import scala.math;
 import org.apache.log4j._;
 import com.sun.jersey.spi.StringReader
-import de.l3s.boilerpipe.sax.BoilerpipeSAXInput
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.SparkContext._
 import org.xml.sax.InputSource;
-import de.l3s.boilerpipe.extractors;
 import java.io.StringReader;
 import org.cyberneko.html.HTMLConfiguration
 import scala.collection.JavaConversions._
@@ -37,7 +35,6 @@ object LDA {
 
     new SparkContext(conf)
   }
-
 
   def main(args: Array[String]) {
     val t0 = System.currentTimeMillis()
@@ -69,17 +66,17 @@ object LDA {
     val ETA = 0.000000000001;
     val DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD = 0.000001;
 
-    val logger = LogManager.getLogger("WarcFileProcessor")
+    //val logger = LogManager.getLogger("WarcFileProcessor")
     val HDFS_ROOT = "hdfs://dco-node121.dco.ethz.ch:54310/"
     val input = HDFS_ROOT + args(0);
     val output = HDFS_ROOT + args(3);
     val V = args(1).toInt
     val K = args(2).toInt
     //Read vectorized data set
-    val documents = sc.textFile(input).flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
+    val documents = sc.sequenceFile[String,String](input).zipWithIndex().map(cur =>
     //val documents = sc.textFile("ap/docs_start.txt").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
     {
-      val doc = cur._1
+      val doc = cur._1._2
       val doc_id = cur._2
       val elems = doc.split(" ");
 
@@ -88,20 +85,20 @@ object LDA {
       var counts = Array[Int]();
       Tuple2(elems.drop(1).map(e=> {val params = e.split(":"); Tuple2(params(0).toInt, params(1).toDouble); }),doc_id)
     }).cache();
-
-    //Initialize Variables
+     //Initialize Variables
     val D = documents.count().toInt;
     var alpha = DenseVector.fill[Double](K){0.1} // MR.LDA uses 0.001
     var lambda = DenseMatrix.fill[Double](V,K){ Math.random() / (Math.random() + V) };
-    val gamma = DenseMatrix.fill[Double](D,K){0.1 + V/K };
     val sufficientStats = DenseVector.zeros[Double](K)
 
     for(global_iteration <- 0 until MAX_GLOBAL_ITERATION) {
       val t0 = System.currentTimeMillis()
+      val lambda_broadcast = sc.broadcast(lambda);
       val result = documents.flatMap(cur => {
         val digammaCache = Cache.lruCache(10000);
         val document = cur._1
         val cur_doc = cur._2.toInt
+        val gamma = DenseVector.fill[Double](K){0.1 + V/K };
         val phi = DenseMatrix.zeros[Double](V, K);
         var emit = List[((Int, Int), Double)]()
         for (iter <- 0 until GAMMA_CONV_ITER) {
@@ -111,14 +108,14 @@ object LDA {
             val count = document(word_ind)._2;
 
             for (k <- 0 until K) {
-              val digamma_key = gamma(cur_doc,k);
+              val digamma_key = gamma(k);
               if(digammaCache.containsKey(digamma_key)) {
-                phi(v, k) = lambda(v, k) * digammaCache.get(digamma_key)
+                phi(v, k) = lambda_broadcast.value(v, k) * digammaCache.get(digamma_key)
               }
               else {
                   val value = digamma_key;
                   digammaCache.put(digamma_key, value);
-                  phi(v, k) = lambda(v, k) * value;
+                  phi(v, k) = lambda_broadcast.value(v, k) * value;
               }
             }
             //normalize rows of phi
@@ -128,7 +125,7 @@ object LDA {
             val sigma_org = sigma.t.copy();
             sigma :+= (phi(v, ::) :* (count)).t;
           }
-          gamma(cur_doc, ::) := (alpha + sigma).t;
+          gamma := alpha + sigma;
         }
         for (k <- 0 until K) {
           for (word_ind <- 0 until document.length){//document.length) {
@@ -136,14 +133,8 @@ object LDA {
             val count = document(word_ind)._2 ;
             emit = emit.+:((k, v), count * phi(v, k))
           }
-          val suff_stat = Gamma.digamma(gamma(cur_doc, k)) - Gamma.digamma((sum(gamma(cur_doc, ::).t)))
-          if(suff_stat.isNaN())
-          {
+          val suff_stat = Gamma.digamma(gamma(k)) - Gamma.digamma((sum(gamma)))
             emit = emit.+:((k, DELTA), suff_stat)
-          }
-          else {
-            emit = emit.+:((k, DELTA), suff_stat)
-          }
         }
         emit
       }).reduceByKey(_ + _)
