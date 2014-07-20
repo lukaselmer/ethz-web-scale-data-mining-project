@@ -53,16 +53,15 @@ object VectorizeCorpus {
     val vocabFiltered = vocab.filter(v => !v.isEmpty())
                               .map(w => (w,1))
                               .reduceByKey(_ + _)
-                              .filter(f=> f._2 > filter_threshold)
+                              .filter(f=> !f._1.isEmpty() && f._2 > filter_threshold)
                               .map(f => f._1);
 
-    val vocabSize = vocabFiltered.count();
-    //Build a hashtable of word_index
+    //Build a hash table of <word, index>
     val dictionary = new mutable.HashMap[String, Int];
     var index = 0;
 
-    vocabFiltered.collect().foreach(u => {
-      dictionary.put(u, index);
+    vocabFiltered.collect().foreach(word => {
+      dictionary.put(word, index);
       index += 1;
     })
 
