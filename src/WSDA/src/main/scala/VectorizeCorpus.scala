@@ -1,29 +1,18 @@
-import java.net.URL
-import java.util.regex.Pattern
-import edu.umd.cloud9.math.Gamma
-import org.apache.log4j.LogManager
 import java.net.URI;
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.SequenceFile.{CompressionType, Writer}
 import org.apache.hadoop.io.{SequenceFile, Text}
-
 import scala.collection.mutable
-import scala.math;
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.SparkContext._
-import org.xml.sax.InputSource;
-import java.io.StringReader;
 import scala.collection.JavaConversions._
 import java.io._
 
 object VectorizeCorpus {
   private val successExtension: String = ".success"
-  private val topDirectoryNameInput: String = "cw-data/"
   def createSparkContext(): SparkContext = {
     val conf = new SparkConf().setAppName("Simple Application")
-    //conf.set("spark.executor.memory", "10g");
     conf.set("spark.default.parallelism","200");
     conf.set("spark.akka.frameSize","2000");
     conf.set("spark.akka.timeout","2000");
@@ -45,8 +34,6 @@ object VectorizeCorpus {
   }
 
   def buildVocabulary(args: Array[String]) {
-    val logger = LogManager.getLogger("Vectorize Corpus")
-
     val HDFS_ROOT = "hdfs://dco-node121.dco.ethz.ch:54310/"
     //val HDFS_ROOT = ""
     val input = HDFS_ROOT + args(0)
@@ -84,7 +71,7 @@ object VectorizeCorpus {
     val broadcasted_dictionary = sc.broadcast(dictionary);
 
     val files = filesToProcess(input)
-    sc.parallelize(files).foreach(inputPath =>
+    sc.parallelize(files, 500).foreach(inputPath =>
     {
       val fs = FileSystem.get(new Configuration())
       val last_index = inputPath.lastIndexOf("/")
@@ -97,9 +84,9 @@ object VectorizeCorpus {
 
       val reader = new SequenceFile.Reader(fs, new Path(inputPath), conf);
       val writer: Writer = getFileWriter(output+ "/" + filePath)
-      val frequency_table = new mutable.HashMap[Int, Int];
       while (reader.next(key, value))
       {
+        val frequency_table = new mutable.HashMap[Int, Int];
         var emit = new Text();
         val content = value.toString().split(" ");
         content.foreach(w =>
