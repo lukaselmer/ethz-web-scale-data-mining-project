@@ -2,11 +2,14 @@ import java.io.{PrintWriter, File}
 import breeze.linalg._
 import breeze.numerics._
 import edu.umd.cloud9.math.Gamma
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.serializer.KryoRegistrator
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.SparkContext._
 import com.esotericsoftware.kryo.Kryo
-import scala.collection.mutable.HashMap;
 
 class LDARegistrator extends KryoRegistrator {
   override def registerClasses(kryo: Kryo) {
@@ -170,14 +173,16 @@ object LDA {
     alpha
   }
 
-
   def saveMatrix(matrix: DenseMatrix[Double], outputPath: String) {
-      val pw = new PrintWriter(new File(outputPath))
-      try {
-        for(i <- 0 until matrix.rows) {
-          pw.append(matrix(i,::).toString)
-        }
-      } finally pw.close()
+    val fs = FileSystem.get(new Configuration())
+    val fsout = fs.create(new Path(outputPath), true);
+    val pw = new PrintWriter(fsout);
+    try {
+      for(i <- 0 until matrix.rows) {
+        pw.println(matrix(i,::).toString)
+      }
+    }
+    finally pw.close()
   }
 
   def createSparkContext(): SparkContext = {
