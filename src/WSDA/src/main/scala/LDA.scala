@@ -1,21 +1,8 @@
-import java.net.URL
-import java.util.regex.Pattern
 import breeze.linalg._
 import breeze.numerics._
-
 import edu.umd.cloud9.math.Gamma;
-import scala.util.control.Breaks._
-import org.apache.log4j.Logger
-import scala.collection.mutable;
-import scala.math;
-import org.apache.log4j._;
-import com.sun.jersey.spi.StringReader
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.SparkContext._
-import org.xml.sax.InputSource;
-import java.io.StringReader;
-import org.cyberneko.html.HTMLConfiguration
-import scala.collection.JavaConversions._
 import java.io._
 
 object LDA {
@@ -68,11 +55,13 @@ object LDA {
 
     //val logger = LogManager.getLogger("WarcFileProcessor")
     val HDFS_ROOT = "hdfs://dco-node121.dco.ethz.ch:54310/"
+    //val HDFS_ROOT = "";
     val input = HDFS_ROOT + args(0);
     val output = HDFS_ROOT + args(3);
     val V = args(1).toInt
     val K = args(2).toInt
     //Read vectorized data set
+
     val documents = sc.sequenceFile[String,String](input).zipWithIndex().map(cur =>
     //val documents = sc.textFile("ap/docs_start.txt").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
     {
@@ -83,14 +72,13 @@ object LDA {
       doc.substring(1+doc.indexOf(" "))
       var indexes = Array[Int]();
       var counts = Array[Int]();
-      Tuple2(elems.drop(1).map(e=> {val params = e.split(":"); Tuple2(params(0).toInt, params(1).toDouble); }),doc_id)
-    }).cache();
+      Tuple2(elems.map(e=> {val params = e.split(":"); Tuple2(params(0).toInt, params(1).toDouble); }),doc_id)
+    }) .cache();
      //Initialize Variables
     val D = documents.count().toInt;
     var alpha = DenseVector.fill[Double](K){0.1} // MR.LDA uses 0.001
     var lambda = DenseMatrix.fill[Double](V,K){ Math.random() / (Math.random() + V) };
     val sufficientStats = DenseVector.zeros[Double](K)
-
     for(global_iteration <- 0 until MAX_GLOBAL_ITERATION) {
       val t0 = System.currentTimeMillis()
       val lambda_broadcast = sc.broadcast(lambda);
@@ -99,42 +87,58 @@ object LDA {
         val document = cur._1
         val cur_doc = cur._2.toInt
         val gamma = DenseVector.fill[Double](K){0.1 + V/K };
-        val phi = DenseMatrix.zeros[Double](V, K);
+        //val phi = DenseMatrix.zeros[Double](V, K);
         var emit = List[((Int, Int), Double)]()
         for (iter <- 0 until GAMMA_CONV_ITER) {
           val sigma = DenseVector.zeros[Double](K)
           for (word_ind <- 0 until document.length) {
             val v = document(word_ind)._1
             val count = document(word_ind)._2;
-
+            var phi = DenseVector.zeros[Double](K);
             for (k <- 0 until K) {
               val digamma_key = gamma(k);
               if(digammaCache.containsKey(digamma_key)) {
-                phi(v, k) = lambda_broadcast.value(v, k) * digammaCache.get(digamma_key)
+                phi(k) = lambda_broadcast.value(v, k) * digammaCache.get(digamma_key);
+                //phi(v, k) = lambda_broadcast.value(v, k) * digammaCache.get(digamma_key)
               }
               else {
-                  val value = digamma_key;
+                  val value = Gamma.digamma(digamma_key);
                   digammaCache.put(digamma_key, value);
-                  phi(v, k) = lambda_broadcast.value(v, k) * value;
+                  phi(k) = lambda_broadcast.value(v, k) * value;
+                  //phi(v, k) = lambda_broadcast.value(v, k) * value;
               }
             }
             //normalize rows of phi
-            val v_norm = sum(phi(v, ::).t);
-            val old_phi = phi(v, ::).copy();
-            phi(v, ::) := phi(v, ::) :* (1 / v_norm);
-            val sigma_org = sigma.t.copy();
-            sigma :+= (phi(v, ::) :* (count)).t;
+            val v_norm = sum(phi);
+            phi = phi :* (1 / v_norm);
+            //phi(v, ::) := phi(v, ::) :* (1 / v_norm);
+            sigma :+= (phi :* count);
           }
           gamma := alpha + sigma;
         }
-        for (k <- 0 until K) {
-          for (word_ind <- 0 until document.length){//document.length) {
-            val v = document(word_ind)._1;
-            val count = document(word_ind)._2 ;
-            emit = emit.+:((k, v), count * phi(v, k))
+        for (word_ind <- 0 until document.length) {
+          var current_phi = DenseVector.zeros[Double](K);
+          val v = document(word_ind)._1;
+          val count = document(word_ind)._2 ;
+          for (k <- 0 until K) {
+            val digamma_key = gamma(k);
+            if(digammaCache.containsKey(digamma_key)) {
+              current_phi(k) = lambda_broadcast.value(v, k) * digammaCache.get(digamma_key);
+            }
+            else {
+              val value = Gamma.digamma(digamma_key);
+              digammaCache.put(digamma_key, value);
+              current_phi(k) = lambda_broadcast.value(v, k) * value;
+            }
           }
+          val v_norm = sum(current_phi);
+          current_phi = current_phi :* (1 / v_norm);
+          for (k <- 0 until K)
+            emit = emit.+:((k, v), count * current_phi(k))
+        }
+        for (k <- 0 until K) {
           val suff_stat = Gamma.digamma(gamma(k)) - Gamma.digamma((sum(gamma)))
-            emit = emit.+:((k, DELTA), suff_stat)
+          emit = emit.+:((k, DELTA), suff_stat)
         }
         emit
       }).reduceByKey(_ + _)
