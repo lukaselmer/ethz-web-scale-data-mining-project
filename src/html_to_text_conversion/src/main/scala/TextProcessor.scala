@@ -23,36 +23,90 @@ object TextProcessor {
       // All escaped sequences
       "(\\&[a-z0-9]+;)",
     Pattern.CASE_INSENSITIVE)
-  val regexPostprocessing1ReplaceWithSpace = Pattern.compile("\\p{Punct}", Pattern.CASE_INSENSITIVE)
-  val regexPostprocessing2DeleteMatches = Pattern.compile("(\\b([^a-z ]|[a-z])*[^a-z ]+([^a-z ]|[a-z])*\\b)|(\\b\\w{1,2}\\b)", Pattern.CASE_INSENSITIVE)
-  val regexPostprocessing3 = Pattern.compile("\\s+", Pattern.CASE_INSENSITIVE)
+  val postprocessingDeleteWhitespace = Pattern.compile("\\s+", Pattern.CASE_INSENSITIVE)
+  val postprocessing1ReplaceWithSpace = Pattern.compile("\\p{Punct}", Pattern.CASE_INSENSITIVE)
+  val postprocessing2WordsContainingNonAZ = Pattern.compile("\\b([^a-z ]|[a-z])*[^a-z ]+([^a-z ]|[a-z])*\\b",
+    Pattern.CASE_INSENSITIVE)
+  val postprocessing3DeleteShortWords = Pattern.compile("(\\b\\w{1,2}\\b)", Pattern.CASE_INSENSITIVE)
 
-  def cleanString(text: String): String = {
-    val preprocessedText = regexPreprocessing.matcher(text).replaceAll("")
-    val stream = analyzer.tokenStream("contents", new StringReader(preprocessedText))
-    val str = tokenStreamToString(stream)
-    regexPostprocessing3.matcher(
-      regexPostprocessing2DeleteMatches.matcher(
-        regexPostprocessing1ReplaceWithSpace.matcher(str).replaceAll(" ")
-      ).replaceAll(" ")
-    ).replaceAll(" ").trim
-    // new String(Normalizer.normalize(str, Normalizer.Form.NFKD).getBytes("ascii"), "ascii")
+  /**
+   * This is used for ignoring whole documents if they contain too many words with special characters.
+   * This way, some text which are written in non-English languages can be filtered out.
+   * The BAD_DOCUMENT_THRESHOLD is calculated by:
+   * len(after removing non-[a-z] characters) / len(before removing non-[a-z] characters)
+   * The higher the value, the more documents are removed.
+   * 0.7 means that about 70% of the words in a document have to not contain non-[a-z] characters.
+   */
+  val BAD_DOCUMENT_THRESHOLD = 0.7
 
+  /**
+   * Cleans the text by applying stemming, removing stopwords, removing words containing invalid characters, removing
+   * documents if too many words with invalid characters are found, removing numbers, applying white space
+   * normalization (e.g. replace line breaks by space) and compacting white space.
+   *
+   * For more information @see TextProcessorSpec
+   *
+   * @param textOriginal
+   * @return
+   */
+  def cleanString(textOriginal: String): String = {
+    val preprocessedText = applyRegex(regexPreprocessing, textOriginal, "")
+    val textStemmedWithoutStopWords = tokenStreamToString(analyzer.tokenStream("contents", new StringReader(preprocessedText)))
+    val textNormalizedWhiteSpace = normalizeWhiteSpace(textStemmedWithoutStopWords)
+    val textReplacedWordsWithNonAZCharacters = deleteNonAZContainingWords(textNormalizedWhiteSpace)
+
+    if (isDocumentBad(textNormalizedWhiteSpace, textReplacedWordsWithNonAZCharacters)) return ""
+
+    val textWithoutShortWords = deleteShortWords(textReplacedWordsWithNonAZCharacters)
+    deleteWhiteSpace(textWithoutShortWords)
+  }
+
+  private def normalizeWhiteSpace(textCleanedHtml: String): String = {
+    applyRegex(postprocessingDeleteWhitespace,
+      applyRegex(postprocessing1ReplaceWithSpace, textCleanedHtml, " "),
+      " ").trim
+  }
+
+  private def deleteNonAZContainingWords(textCleanWhiteSpace: String): String = {
+    applyRegex(postprocessingDeleteWhitespace,
+      applyRegex(postprocessing2WordsContainingNonAZ, textCleanWhiteSpace, " "),
+      " ").trim
+  }
+
+  private def isDocumentBad(textCleanWhiteSpace: String, textReplacedWordsWithNonAZCharacters: String): Boolean = {
+    if (textReplacedWordsWithNonAZCharacters.length == 0) return true
+
+    val ratio = textReplacedWordsWithNonAZCharacters.length.toDouble / textCleanWhiteSpace.length.toDouble
+    return ratio < BAD_DOCUMENT_THRESHOLD
+  }
+
+  private def deleteShortWords(textReplacedWordsWithNonAZCharacters: String): String = {
+    applyRegex(postprocessing3DeleteShortWords, textReplacedWordsWithNonAZCharacters, " ")
+  }
+
+  private def deleteWhiteSpace(textWithoutShortWords: String): String = {
+    applyRegex(postprocessingDeleteWhitespace, textWithoutShortWords, " ").trim
   }
 
   private def tokenStreamToString(stream: TokenStream): String = {
     val sb = new mutable.StringBuilder()
-    val attr = stream.addAttribute(classOf[CharTermAttribute]);
-    stream.reset();
-    while (stream.incrementToken()) {
+    val attr = stream.addAttribute(classOf[CharTermAttribute])
+    stream.reset()
+    while (stream.incrementToken())
       sb.append(attr.toString).append(" ")
-    }
-    stream.end();
-    stream.close();
+    stream.end()
+    stream.close()
     sb.toString
   }
 
-  def initStopWords(): CharArraySet = {
+  private def applyRegex(regex: Pattern, textWithoutShortWords: String, replacement: String): String = {
+    val res = regex.matcher(
+      textWithoutShortWords
+    ).replaceAll(replacement)
+    res
+  }
+
+  private def initStopWords(): CharArraySet = {
     // From StopAnalyzer.ENGLISH_STOP_WORDS_SET
     val words1 = "a,an,and,are,as,at,be,but,by,for,if,in,into,is,it,no,not,of,on,or,such,that,the,their,then,there," +
       "these,they,this,to,was,will,with"
