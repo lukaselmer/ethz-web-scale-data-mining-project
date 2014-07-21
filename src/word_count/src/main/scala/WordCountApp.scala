@@ -11,6 +11,7 @@ object WordCountApp {
     val minPartitions = sc.getConf.getInt("minPartitions", 10)
 
     sc.sequenceFile[Text, Text](inputDirectory, classOf[Text], classOf[Text], minPartitions)
+      .filter(x => x._2.toString.trim != "")
       .flatMap(_._2.toString.trim.split(" "))
       .map(word => (word, 1))
       .reduceByKey(_ + _)
