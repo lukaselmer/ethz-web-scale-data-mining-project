@@ -8,7 +8,7 @@ object WordCountApp {
     val sc = createSparkContext()
     val inputDirectory = sc.getConf.get("input")
     val outputFile = sc.getConf.get("output")
-    val minPartitions = sc.getConf.getInt("minPartitions", 5)
+    val minPartitions = sc.getConf.getInt("minPartitions", 10)
 
     sc.sequenceFile[Text, Text](inputDirectory, classOf[Text], classOf[Text], minPartitions)
       .flatMap(_._2.toString.trim.split(" "))
