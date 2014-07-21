@@ -9,16 +9,15 @@ import org.apache.spark.{SparkConf, SparkContext}
 
 object HtmlToTextConversionApp {
 
+  private val history_file_extension: String = ".warc"
   private val successExtension: String = ".success"
-  private val topDirectoryNameInput: String = "cw-data/"
-  private val topDirectoryNameOutput: String = "ClueWebConvertedClean2/"
 
   def main(args: Array[String]) {
     val sc = createSparkContext()
     val inputDirectory = sc.getConf.get("input")
     val outputDirectory = sc.getConf.get("output")
     val files = filesToProcess(inputDirectory, outputDirectory)
-    val processWarcFileFunction = (filename: String) => processWarcFile(outputDirectory, filename)
+    val processWarcFileFunction = (filename: String) => processWarcFile(outputDirectory, inputDirectory, filename)
 
     if (sc.getConf.getBoolean("local", false))
       files.foreach(processWarcFileFunction)
@@ -34,9 +33,10 @@ object HtmlToTextConversionApp {
       conf.set("local", "true")
       conf.setMaster("local[*]")
       conf.set("input", "data/cw-data")
-      conf.set("output", "out/ClueWebConverted")
-      scala.reflect.io.Path("out/ClueWebConverted").deleteRecursively()
-      scala.reflect.io.Path("out/ClueWebConverted").createDirectory(failIfExists = true)
+      val path = "out/ClueWebConverted"
+      conf.set("output", path)
+      scala.reflect.io.Path(path).deleteRecursively()
+      scala.reflect.io.Path(path).createDirectory(failIfExists = true)
     } else {
       conf.set("local", "false")
       conf.set("input", "hdfs://dco-node121.dco.ethz.ch:54310/cw-data")
@@ -46,13 +46,14 @@ object HtmlToTextConversionApp {
     new SparkContext(conf)
   }
 
-  def processWarcFile(outPath: String, inputPath: String) {
+  def processWarcFile(outPath: String, inputDirectory: String, inputPath: String) {
     val fs = FileSystem.get(new Configuration())
     val contentStream = fs.open(new Path(inputPath))
     val logger = LogManager.getLogger("WarcFileProcessor")
     val processor = new WarcFileProcessor(contentStream, logger)
 
-    val filePath = inputPath.substring(inputPath.lastIndexOf(topDirectoryNameInput)).replaceFirst(topDirectoryNameInput, "")
+    val topDirectory = inputDirectory.split("/").last
+    val filePath = inputPath.substring(inputPath.lastIndexOf(topDirectory + "/")).replaceFirst(topDirectory + "/", "")
     val writer: Writer = getFileWriter(outPath + "/" + filePath)
     processor.foreach(doc => writer.append(doc._1, doc._2))
     writer.close()
@@ -75,12 +76,17 @@ object HtmlToTextConversionApp {
   }
 
   def filesToProcess(inputDirectory: String, outputDirectory: String): List[String] = {
-    // TODO: refactor this
+    def relativePathToFile(inputDirectory: String, el: String): String = {
+      val topDirectory = inputDirectory.split("/").last
+      el.substring(el.lastIndexOf(topDirectory + "/")).replaceFirst(topDirectory + "/", "")
+    }
+
     val inputFiles = HadoopFileHelper.listHdfsFiles(new Path(inputDirectory))
-      .map(el => el.substring(el.lastIndexOf(topDirectoryNameInput)).replaceFirst(topDirectoryNameInput, ""))
-      .filter(el => el.endsWith(".warc"))
+      .map(filePath => relativePathToFile(inputDirectory, filePath))
+      .filter(el => el.endsWith(history_file_extension))
+
     val successfulProcessedFiles = HadoopFileHelper.listHdfsFiles(new Path(outputDirectory))
-      .map(el => el.substring(el.lastIndexOf(topDirectoryNameOutput)).replaceFirst(topDirectoryNameOutput, ""))
+      .map(filePath => relativePathToFile(outputDirectory, filePath))
       .filter(el => el.endsWith(successExtension))
 
     val filesToProcess = inputFiles.filter(el => !successfulProcessedFiles.contains(el + successExtension))
