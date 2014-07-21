@@ -1,11 +1,20 @@
 import java.io.{PrintWriter, File}
 import breeze.linalg._
 import breeze.numerics._
-import edu.umd.cloud9.math.Gamma;
+import edu.umd.cloud9.math.Gamma
+import org.apache.spark.serializer.KryoRegistrator
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.SparkContext._
+import com.esotericsoftware.kryo.Kryo
 import scala.collection.mutable.HashMap;
 
+class LDARegistrator extends KryoRegistrator {
+  override def registerClasses(kryo: Kryo) {
+    kryo.register(classOf[DenseVector[Double]])
+    kryo.register(classOf[DenseMatrix[Double]])
+    kryo.register(classOf[LdaSettings])
+  }
+}
 object LDA {
   /*
   args:
@@ -14,11 +23,11 @@ object LDA {
   2: Vocab
   3: Topics
    */
+  val setting = new LdaSettings();
+  setting.getSettings("Settings Path");
 
   def computeTopics(args: Array[String]) {
     val sc = createSparkContext();
-    val setting = new LdaSettings();
-    setting.getSettings("Settings Path");
 
     val DELTA = -1; //Special key to distinguish between Beta and Gamma updates in the reducer.
 
@@ -109,54 +118,58 @@ object LDA {
       for (k <- 0 until K) {
         lambda(k, ::) := lambda(k, ::) :* (1 / norm(k));
       }
-
       lambda = lambda.t;
       //Update alpha, for more details refer to section 3.4 in Mr. LDA
-      var keepGoing = true;
-      var alphaIteration_count = 0;
-      while (keepGoing) {
-        val gradient = DenseVector.zeros[Double](K);
-        val qq = DenseVector.zeros[Double](K);
-        for (i <- 0 until K) {
-          gradient(i) = D * (Gamma.digamma(sum(alpha)) - Gamma.digamma(alpha(i))) + sufficientStats(i);
-          qq(i) = -1 / (D * Gamma.trigamma(alpha(i)))
-        }
-        val z_1 = 1 / (D * Gamma.trigamma(sum(alpha)));
-        val b = sum(gradient :* qq) / (z_1 + sum(qq));
-        val step_size = (gradient - b) :* qq;
-        var alpha_new = alpha;
-
-        var decay = 0.0;
-        var keepDecaying = true;
-        //Make sure alpha vector stays positive within each update, this is done by decaying the step size till a
-        //feasible alpha vector is returned.
-        while(keepDecaying) {
-          if(any( step_size * Math.pow(setting.ALPHA_UPDATE_DECAY_VALUE, decay)  :> alpha)) {
-              decay = decay + 1;
-          }
-          else
-          {
-              alpha_new = alpha_new - step_size * Math.pow(setting.ALPHA_UPDATE_DECAY_VALUE, decay) ;
-              keepDecaying = false;
-          }
-          if(decay > setting.ALPHA_UPDATE_MAXIMUM_DECAY)
-            keepDecaying = false;
-        }
-        //Check for convergence of alpha vector
-        val delta_alpha = abs((alpha_new - alpha) :/ alpha);
-        keepGoing = false;
-        if (any(delta_alpha :>  setting.DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD))
-          keepGoing = true;
-        if (alphaIteration_count > setting.ALPHA_MAX_ITERATION)
-          keepGoing = false;
-        alphaIteration_count += 1;
-        alpha = alpha_new;
-      }
+      alpha = updateAlphaVector(alpha, sufficientStats, K, D);
       saveMatrix(lambda.t, output+"/lambda_" + global_iteration);
-      //val final_output = sc.parallelize(List(lambda.t.toString(1000000,10000010)))
-      //final_output.saveAsTextFile(output+"/" + global_iteration + "/");
     }
   }
+
+  def updateAlphaVector(alpha_0:DenseVector[Double], sufficientStats: DenseVector[Double], K: Int, D: Long) : DenseVector[Double] = {
+    var keepGoing = true;
+    var alphaIteration_count = 0;
+    var alpha = alpha_0;
+    while (keepGoing) {
+      val gradient = DenseVector.zeros[Double](K);
+      val qq = DenseVector.zeros[Double](K);
+      for (i <- 0 until K) {
+        gradient(i) = D * (Gamma.digamma(sum(alpha)) - Gamma.digamma(alpha(i))) + sufficientStats(i);
+        qq(i) = -1 / (D * Gamma.trigamma(alpha(i)))
+      }
+      val z_1 = 1 / (D * Gamma.trigamma(sum(alpha)));
+      val b = sum(gradient :* qq) / (z_1 + sum(qq));
+      val step_size = (gradient - b) :* qq;
+      var alpha_new = alpha;
+
+      var decay = 0.0;
+      var keepDecaying = true;
+      //Make sure alpha vector stays positive within each update, this is done by decaying the step size till a
+      //feasible alpha vector is returned.
+      while(keepDecaying) {
+        if(any( step_size * Math.pow(setting.ALPHA_UPDATE_DECAY_VALUE, decay)  :> alpha)) {
+          decay = decay + 1;
+        }
+        else
+        {
+          alpha_new = alpha_new - step_size * Math.pow(setting.ALPHA_UPDATE_DECAY_VALUE, decay) ;
+          keepDecaying = false;
+        }
+        if(decay > setting.ALPHA_UPDATE_MAXIMUM_DECAY)
+          keepDecaying = false;
+      }
+      //Check for convergence of alpha vector
+      val delta_alpha = abs((alpha_new - alpha) :/ alpha);
+      keepGoing = false;
+      if (any(delta_alpha :>  setting.DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD))
+        keepGoing = true;
+      if (alphaIteration_count > setting.ALPHA_MAX_ITERATION)
+        keepGoing = false;
+      alphaIteration_count += 1;
+      alpha = alpha_new;
+    }
+    alpha
+  }
+
 
   def saveMatrix(matrix: DenseMatrix[Double], outputPath: String) {
       val pw = new PrintWriter(new File(outputPath))
@@ -172,6 +185,9 @@ object LDA {
     conf.set("spark.default.parallelism","200");
     conf.set("spark.akka.frameSize","200");
     conf.set("spark.akka.timeout","200");
+    conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+    conf.set("spark.kryo.registrator", "LDARegistrator")
+    conf.set("spark.kryoserializer.buffer.mb", "1000");
     new SparkContext(conf)
   }
 
