@@ -1,6 +1,8 @@
 import java.io.{PrintWriter, File}
+import breeze.io.CSVWriter
 import breeze.linalg._
 import breeze.numerics._
+import breeze.linalg.csvwrite
 import edu.umd.cloud9.math.Gamma
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.conf.Configuration
@@ -27,49 +29,50 @@ object LDA {
   3: Topics
    */
   val setting = new LdaSettings();
-  setting.getSettings("Settings Path");
 
   def computeTopics(args: Array[String]) {
     val sc = createSparkContext();
 
     val DELTA = -1; //Special key to distinguish between Beta and Gamma updates in the reducer.
 
-    val HDFS_ROOT = "hdfs://dco-node121.dco.ethz.ch:54310/"
-    val input = HDFS_ROOT + args(0);
+    val input = args(0);
     val V = args(1).toInt
     val K = args(2).toInt
-    val output = HDFS_ROOT + args(3);
+    val output = args(3);
+    val settingsFilePath = args(4);
+    setting.getSettings(settingsFilePath);
     //Read vectorized data set
 
     val documents = sc.sequenceFile[String,String](input)
                       .zipWithIndex()
                       .map({ case((key, value), index) =>
                       {
-                        val doc = value ;//cur._1._2
-                        val doc_id = index;//cur._2
+                        val doc = value ;
+                        val doc_id = index;
                         val document_elements = doc.split(" ");
                         //Parse every document element from key:value string to a tuple(key, value)
                         val document_words = document_elements.map(e => {
                           val params = e.split(":");
                           Tuple2(params(0).toInt, params(1).toInt);
                         })
-                        document_words
-                        //Tuple2(document_words, doc_id)
+                        Tuple2(document_words, doc_id)
                       }}).cache();
 
      //Initialize Global Variables
 
     val D = documents.count().toInt;
-    var alpha = DenseVector.fill[Double](K){setting.ALPHA_INITIALIZATION} // MR.LDA uses 0.001
+    var alpha = DenseVector.fill[Double](K){setting.ALPHA_INITIALIZATION}
     var lambda = DenseMatrix.fill[Double](V,K){ Math.random() / (Math.random() + V) };
     val sufficientStats = DenseVector.zeros[Double](K);
 
     for(global_iteration <- 0 until setting.MAX_GLOBAL_ITERATION) {
       //Broadcast lambda at the beginning of every iteration
       val lambda_broadcast = sc.broadcast(lambda);
-      documents.flatMap(document => {
+      documents.flatMap(tup => {
+        val doc_id = tup._2
+        val document = tup._1;
         val digammaCache = DenseVector.zeros[Double](K);
-        val gamma = DenseVector.fill[Double](K){0.1 + V/K };
+        val gamma = DenseVector.fill[Double](K){ setting.ALPHA_INITIALIZATION + V/K };
         var emit = List[((Int, Int), Double)]()
         for (iteration <- 0 until setting.MAX_GAMMA_CONVERGENCE_ITERATION ) {
           val sigma = DenseVector.zeros[Double](K)
@@ -124,7 +127,7 @@ object LDA {
       lambda = lambda.t;
       //Update alpha, for more details refer to section 3.4 in Mr. LDA
       alpha = updateAlphaVector(alpha, sufficientStats, K, D);
-      saveMatrix(lambda.t, output+"/lambda_" + global_iteration);
+      saveMatrix(lambda, output+"/lambda_" + global_iteration);
     }
   }
 
@@ -178,21 +181,28 @@ object LDA {
     val fsout = fs.create(new Path(outputPath), true);
     val pw = new PrintWriter(fsout);
     try {
-      for(i <- 0 until matrix.rows) {
-        pw.println(matrix(i,::).toString)
+      for (i <- 0 until matrix.rows) {
+        var row = matrix(i, 0).toString();
+        for (j <- 1 until matrix.cols) {
+          row = row + " " + matrix(i, j).toString();
+        }
+        pw.println(row);
       }
     }
     finally pw.close()
   }
 
   def createSparkContext(): SparkContext = {
-    val conf = new SparkConf().setAppName("Simple Application")
+    val conf = new SparkConf().setAppName("Spark LDA ")
     conf.set("spark.default.parallelism","200");
-    conf.set("spark.akka.frameSize","200");
-    conf.set("spark.akka.timeout","200");
-    conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-    conf.set("spark.kryo.registrator", "LDARegistrator")
-    conf.set("spark.kryoserializer.buffer.mb", "1000");
+    conf.set("spark.akka.frameSize","2000");
+    conf.set("spark.akka.timeout","2000");
+    if (!conf.contains("spark.master")) {
+      conf.setMaster("local[*]")
+      conf.set("data", "data/sample.warc")
+    } else {
+      conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/")
+    }
     new SparkContext(conf)
   }
 
