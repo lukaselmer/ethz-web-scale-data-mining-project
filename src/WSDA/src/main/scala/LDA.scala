@@ -1,41 +1,12 @@
+import java.io.{PrintWriter, File}
 import breeze.linalg._
 import breeze.numerics._
 import edu.umd.cloud9.math.Gamma;
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.SparkContext._
-import java.io._
+import scala.collection.mutable.HashMap;
 
 object LDA {
-  def createSparkContext(): SparkContext = {
-    val conf = new SparkConf().setAppName("Simple Application")
-    conf.set("spark.executor.memory", "10g");
-    conf.set("spark.default.parallelism","200");
-    conf.set("spark.akka.frameSize","200");
-    conf.set("spark.akka.timeout","200");
-    // Master is not set => use local master, and local data
-    if (!conf.contains("spark.master")) {
-      conf.setMaster("local[*]")
-      conf.set("data", "data/sample.warc")
-    } else {
-      conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/")
-    }
-
-    new SparkContext(conf)
-  }
-
-  def main(args: Array[String]) {
-    val t0 = System.currentTimeMillis()
-    computeTopics(args)
-    val t1 = System.currentTimeMillis()
-    println("Elapsed time: " + (t1 - t0) + "ms")
-  }
-
-  def writeToFile(p: String, s: String): Unit = {
-    val pw = new PrintWriter(new File(p))
-    try pw.write(s) finally pw.close()
-  }
-
-
   /*
   args:
   0: Input Path
@@ -43,76 +14,66 @@ object LDA {
   2: Vocab
   3: Topics
    */
+
   def computeTopics(args: Array[String]) {
     val sc = createSparkContext();
-    val DELTA = -1;
-    val GAMMA_CONV_ITER = 100;
-    val MAX_GLOBAL_ITERATION = 20;
-    val ALPHA_CONVERGENCE_THRESHOLD = 0.001;
-    val ALPHA_MAX_ITERATION = 1000;
-    val ETA = 0.000000000001;
-    val DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD = 0.000001;
+    val setting = new LdaSettings();
+    setting.getSettings("Settings Path");
 
-    //val logger = LogManager.getLogger("WarcFileProcessor")
+    val DELTA = -1; //Special key to distinguish between Beta and Gamma updates in the reducer.
+
     val HDFS_ROOT = "hdfs://dco-node121.dco.ethz.ch:54310/"
-    //val HDFS_ROOT = "";
     val input = HDFS_ROOT + args(0);
-    val output = HDFS_ROOT + args(3);
     val V = args(1).toInt
     val K = args(2).toInt
+    val output = HDFS_ROOT + args(3);
     //Read vectorized data set
 
-    val documents = sc.sequenceFile[String,String](input).zipWithIndex().map(cur =>
-    //val documents = sc.textFile("ap/docs_start.txt").flatMap(a => a.split("\n")).zipWithIndex().map(cur =>
-    {
-      val doc = cur._1._2
-      val doc_id = cur._2
-      val elems = doc.split(" ");
+    val documents = sc.sequenceFile[String,String](input)
+                      .zipWithIndex()
+                      .map({ case((key, value), index) =>
+                      {
+                        val doc = value ;//cur._1._2
+                        val doc_id = index;//cur._2
+                        val document_elements = doc.split(" ");
+                        //Parse every document element from key:value string to a tuple(key, value)
+                        val document_words = document_elements.map(e => {
+                          val params = e.split(":");
+                          Tuple2(params(0).toInt, params(1).toInt);
+                        })
+                        document_words
+                        //Tuple2(document_words, doc_id)
+                      }}).cache();
 
-      doc.substring(1+doc.indexOf(" "))
-      var indexes = Array[Int]();
-      var counts = Array[Int]();
-      Tuple2(elems.map(e=> {val params = e.split(":"); Tuple2(params(0).toInt, params(1).toDouble); }),doc_id)
-    }) .cache();
-     //Initialize Variables
+     //Initialize Global Variables
+
     val D = documents.count().toInt;
-    var alpha = DenseVector.fill[Double](K){0.1} // MR.LDA uses 0.001
+    var alpha = DenseVector.fill[Double](K){setting.ALPHA_INITIALIZATION} // MR.LDA uses 0.001
     var lambda = DenseMatrix.fill[Double](V,K){ Math.random() / (Math.random() + V) };
-    val sufficientStats = DenseVector.zeros[Double](K)
-    for(global_iteration <- 0 until MAX_GLOBAL_ITERATION) {
-      val t0 = System.currentTimeMillis()
+    val sufficientStats = DenseVector.zeros[Double](K);
+
+    for(global_iteration <- 0 until setting.MAX_GLOBAL_ITERATION) {
+      //Broadcast lambda at the beginning of every iteration
       val lambda_broadcast = sc.broadcast(lambda);
-      val result = documents.flatMap(cur => {
-        val digammaCache = Cache.lruCache(10000);
-        val document = cur._1
-        val cur_doc = cur._2.toInt
+      documents.flatMap(document => {
+        val digammaCache = DenseVector.zeros[Double](K);
         val gamma = DenseVector.fill[Double](K){0.1 + V/K };
-        //val phi = DenseMatrix.zeros[Double](V, K);
         var emit = List[((Int, Int), Double)]()
-        for (iter <- 0 until GAMMA_CONV_ITER) {
+        for (iteration <- 0 until setting.MAX_GAMMA_CONVERGENCE_ITERATION ) {
           val sigma = DenseVector.zeros[Double](K)
+          //Pre-compute exp(digamma((gamma[k])) for efficency
+          for(i <- 0 until K)
+            digammaCache(i) = exp(Gamma.digamma(gamma(i)));
           for (word_ind <- 0 until document.length) {
             val v = document(word_ind)._1
             val count = document(word_ind)._2;
             var phi = DenseVector.zeros[Double](K);
-            for (k <- 0 until K) {
-              val digamma_key = gamma(k);
-              if(digammaCache.containsKey(digamma_key)) {
-                phi(k) = lambda_broadcast.value(v, k) * digammaCache.get(digamma_key);
-                //phi(v, k) = lambda_broadcast.value(v, k) * digammaCache.get(digamma_key)
-              }
-              else {
-                  val value = Gamma.digamma(digamma_key);
-                  digammaCache.put(digamma_key, value);
-                  phi(k) = lambda_broadcast.value(v, k) * value;
-                  //phi(v, k) = lambda_broadcast.value(v, k) * value;
-              }
-            }
-            //normalize rows of phi
+            for (k <- 0 until K)
+                phi(k) = lambda_broadcast.value(v, k) *digammaCache(k);
+            //normalize phi vector
             val v_norm = sum(phi);
             phi = phi :* (1 / v_norm);
-            //phi(v, ::) := phi(v, ::) :* (1 / v_norm);
-            sigma :+= (phi :* count);
+            sigma :+= (phi :* count.toDouble);
           }
           gamma := alpha + sigma;
         }
@@ -120,35 +81,27 @@ object LDA {
           var current_phi = DenseVector.zeros[Double](K);
           val v = document(word_ind)._1;
           val count = document(word_ind)._2 ;
-          for (k <- 0 until K) {
-            val digamma_key = gamma(k);
-            if(digammaCache.containsKey(digamma_key)) {
-              current_phi(k) = lambda_broadcast.value(v, k) * digammaCache.get(digamma_key);
-            }
-            else {
-              val value = Gamma.digamma(digamma_key);
-              digammaCache.put(digamma_key, value);
-              current_phi(k) = lambda_broadcast.value(v, k) * value;
-            }
-          }
+          for (k <- 0 until K)
+            current_phi(k) = lambda_broadcast.value(v, k) * digammaCache(k);
           val v_norm = sum(current_phi);
           current_phi = current_phi :* (1 / v_norm);
           for (k <- 0 until K)
             emit = emit.+:((k, v), count * current_phi(k))
         }
         for (k <- 0 until K) {
-          val suff_stat = Gamma.digamma(gamma(k)) - Gamma.digamma((sum(gamma)))
-          emit = emit.+:((k, DELTA), suff_stat)
+          val sufficient_statistics = Gamma.digamma(gamma(k)) - Gamma.digamma((sum(gamma)))
+          emit = emit.+:((k, DELTA), sufficient_statistics)
         }
         emit
       }).reduceByKey(_ + _)
         .collect()
-        .foreach(f => {
-        if (f._1._2 != DELTA)
-          lambda(f._1._2, f._1._1) = ETA + f._2
-        else
-          sufficientStats(f._1._1) = f._2;
-      })
+        .foreach({ case ((k, v), aggregate)=>
+        {
+          if (v != DELTA)
+            lambda(v, k) = setting.ETA + aggregate
+          else
+            sufficientStats(k) = aggregate;
+        }});
 
       //normalize columns of lambda
       lambda = lambda.t;
@@ -156,8 +109,9 @@ object LDA {
       for (k <- 0 until K) {
         lambda(k, ::) := lambda(k, ::) :* (1 / norm(k));
       }
+
       lambda = lambda.t;
-      //Update alpha
+      //Update alpha, for more details refer to section 3.4 in Mr. LDA
       var keepGoing = true;
       var alphaIteration_count = 0;
       while (keepGoing) {
@@ -169,37 +123,59 @@ object LDA {
         }
         val z_1 = 1 / (D * Gamma.trigamma(sum(alpha)));
         val b = sum(gradient :* qq) / (z_1 + sum(qq));
-        var H_g = (gradient - b) :* qq;
+        val step_size = (gradient - b) :* qq;
         var alpha_new = alpha;
 
         var decay = 0.0;
         var keepDecaying = true;
+        //Make sure alpha vector stays positive within each update, this is done by decaying the step size till a
+        //feasible alpha vector is returned.
         while(keepDecaying) {
-          if(any( H_g * Math.pow(0.8, decay)  :> alpha)) {
+          if(any( step_size * Math.pow(setting.ALPHA_UPDATE_DECAY_VALUE, decay)  :> alpha)) {
               decay = decay + 1;
           }
           else
           {
-              alpha_new = alpha_new - H_g * Math.pow(0.8, decay) ;
+              alpha_new = alpha_new - step_size * Math.pow(setting.ALPHA_UPDATE_DECAY_VALUE, decay) ;
               keepDecaying = false;
           }
-          if(decay > 11)
+          if(decay > setting.ALPHA_UPDATE_MAXIMUM_DECAY)
             keepDecaying = false;
         }
+        //Check for convergence of alpha vector
         val delta_alpha = abs((alpha_new - alpha) :/ alpha);
         keepGoing = false;
-        if (any(delta_alpha :> DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD))
+        if (any(delta_alpha :>  setting.DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD))
           keepGoing = true;
-        if (alphaIteration_count > ALPHA_MAX_ITERATION)
+        if (alphaIteration_count > setting.ALPHA_MAX_ITERATION)
           keepGoing = false;
         alphaIteration_count += 1;
         alpha = alpha_new;
       }
-      val t1 = System.currentTimeMillis()
-      println("Elapsed time for iteration: " +global_iteration + "---"  + (t1 - t0) + "ms")
+      saveMatrix(lambda.t, output+"/lambda_" + global_iteration);
+      //val final_output = sc.parallelize(List(lambda.t.toString(1000000,10000010)))
+      //final_output.saveAsTextFile(output+"/" + global_iteration + "/");
     }
+  }
 
-    val final_output = sc.parallelize(List(lambda.t.toString(1000000,10000010)))
-    final_output.saveAsTextFile(output);
+  def saveMatrix(matrix: DenseMatrix[Double], outputPath: String) {
+      val pw = new PrintWriter(new File(outputPath))
+      try {
+        for(i <- 0 until matrix.rows) {
+          pw.append(matrix(i,::).toString)
+        }
+      } finally pw.close()
+  }
+
+  def createSparkContext(): SparkContext = {
+    val conf = new SparkConf().setAppName("Simple Application")
+    conf.set("spark.default.parallelism","200");
+    conf.set("spark.akka.frameSize","200");
+    conf.set("spark.akka.timeout","200");
+    new SparkContext(conf)
+  }
+
+  def main(args: Array[String]) {
+    computeTopics(args)
   }
 }
