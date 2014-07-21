@@ -43,5 +43,5 @@ open(ARGV[0]).each do |line|
   topics << Topic.new(line)
 end
 
-topics = topics.sort_by { |topic| topic.terms_by_name.first.word }
+topics.sort_by! { |topic| topic.terms_by_name.first.word }
 topics.each { |t| puts t.to_s }
