@@ -47,9 +47,11 @@ class TextProcessorSpec extends FlatSpec with Matchers {
   it should "ignore records with many special characters" in {
     TextProcessor.cleanString("Í2ÆáoÐ8vc^çYo»z ?2_²™U}áF“'A+l Ý]•™••™•™]YØÿæáñÑëÿ }KÕÝ | ð9ÌäT Öû î   a õ~Pkíëªñ•¡" +
       " TÎÅ 0e8Ô°ÕˆP¢ƒ caj5g1£^×ÁZ9ÂÕ È ŸÃE þO;—(Ä›ÀŒÏ… ¦7ú] y´Ë] ...\nWikinews :Edytowanie artykułów - Wikinews, w" +
-      "olne źródło informacji") should be("cajg wikinew edytowani wikinew woln informacji")
-    // Better (?): should be(""), or should be ("wikinews edytowanie wikinews olne informacji")
-    TextProcessor.cleanString("i skopiuj istniejącą wersję artykułu do dokumentu w") should be("skopiuj dokumentu")
+      "olne źródło informacji") should be("")
+    // Old version: should be("cajg wikinew edytowani wikinew woln informacji")
+    // Better (?): or should be ("wikinews edytowanie wikinews olne informacji")
+    // Old version: TextProcessor.cleanString("i skopiuj istniejącą wersję artykułu do dokumentu w") should be("skopiuj dokumentu")
+    TextProcessor.cleanString("i skopiuj istniejącą wersję artykułu do dokumentu w") should be("")
     // Better (?): should be("")
   }
 
@@ -103,6 +105,11 @@ class TextProcessorSpec extends FlatSpec with Matchers {
 
   it should "remove short words" in {
     TextProcessor.cleanString("x y zz ab yx za abc un nu ku ba tw a q w e blub t nb c ae z g") should be("abc blub")
+  }
+
+  it should "remove whole documents if there are many non-ascii symbols in it" in {
+    TextProcessor.cleanString("normalword somewordwithä somewordwithü somewordwithé somewordwithà somewordwithè") should be("")
+    TextProcessor.cleanString("normalword somewordwithä") should be("")
   }
 
 }
