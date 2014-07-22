@@ -9,7 +9,9 @@ scalaVersion := "2.11.1" */
 
 // Spark
 
-libraryDependencies += "org.apache.spark" %% "spark-core" % "1.0.0"
+libraryDependencies += "org.apache.spark" %% "spark-core" % "1.0.1"
+
+libraryDependencies += "org.apache.hadoop" % "hadoop-client" % "2.4.0"
 
 // Resolvers
 
