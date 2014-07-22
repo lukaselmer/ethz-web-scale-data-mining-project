@@ -1,10 +1,7 @@
-import java.io.{PrintWriter, File}
-import breeze.io.CSVWriter
-import breeze.linalg._
-import breeze.numerics._
-import breeze.linalg.csvwrite
+import java.io.{PrintWriter}
+import breeze.linalg.{DenseMatrix, DenseVector, sum, any, Axis}
+import breeze.numerics.{exp, abs}
 import edu.umd.cloud9.math.Gamma
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.FileSystem
@@ -13,24 +10,18 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.SparkContext._
 import com.esotericsoftware.kryo.Kryo
 
-class LDARegistrator extends KryoRegistrator {
-  override def registerClasses(kryo: Kryo) {
-    kryo.register(classOf[DenseVector[Double]])
-    kryo.register(classOf[DenseMatrix[Double]])
-    kryo.register(classOf[LdaSettings])
-  }
-}
 object LDA {
+  val setting = new LdaSettings();
   /*
+  Entry point for executing LDA.
   args:
   0: Input Path
   1: OutputPath
-  2: Vocab
-  3: Topics
+  2: Vocabulary count
+  3: Number of Topics
+  4: Settings file path
    */
-  val setting = new LdaSettings();
-
-  def computeTopics(args: Array[String]) {
+  def runLDA(args: Array[String]) {
     val sc = createSparkContext();
 
     val DELTA = -1; //Special key to distinguish between Beta and Gamma updates in the reducer.
@@ -60,7 +51,7 @@ object LDA {
 
      //Initialize Global Variables
 
-    val D = documents.count().toInt;
+    val M = documents.count().toInt;
     var alpha = DenseVector.fill[Double](K){setting.ALPHA_INITIALIZATION}
     var lambda = DenseMatrix.fill[Double](V,K){ Math.random() / (Math.random() + V) };
     val sufficientStats = DenseVector.zeros[Double](K);
@@ -110,12 +101,12 @@ object LDA {
         emit
       }).reduceByKey(_ + _)
         .collect()
-        .foreach({ case ((k, v), aggregate)=>
+        .foreach({ case ((topicIndex, wordIndex), aggregate)=>
         {
-          if (v != DELTA)
-            lambda(v, k) = setting.ETA + aggregate
+          if (wordIndex != DELTA)
+            lambda(wordIndex, topicIndex) = setting.ETA + aggregate
           else
-            sufficientStats(k) = aggregate;
+            sufficientStats(topicIndex) = aggregate;
         }});
 
       //normalize columns of lambda
@@ -126,23 +117,23 @@ object LDA {
       }
       lambda = lambda.t;
       //Update alpha, for more details refer to section 3.4 in Mr. LDA
-      alpha = updateAlphaVector(alpha, sufficientStats, K, D);
+      alpha = updateAlphaVector(alpha, sufficientStats, K, M);
       saveMatrix(lambda, output+"/lambda_" + global_iteration);
     }
   }
 
-  def updateAlphaVector(alpha_0:DenseVector[Double], sufficientStats: DenseVector[Double], K: Int, D: Long) : DenseVector[Double] = {
+  def updateAlphaVector(alpha_0:DenseVector[Double], sufficientStats: DenseVector[Double], numberOfTopics: Int, numberOfDocument: Long) : DenseVector[Double] = {
     var keepGoing = true;
     var alphaIteration_count = 0;
     var alpha = alpha_0;
     while (keepGoing) {
-      val gradient = DenseVector.zeros[Double](K);
-      val qq = DenseVector.zeros[Double](K);
-      for (i <- 0 until K) {
-        gradient(i) = D * (Gamma.digamma(sum(alpha)) - Gamma.digamma(alpha(i))) + sufficientStats(i);
-        qq(i) = -1 / (D * Gamma.trigamma(alpha(i)))
+      val gradient = DenseVector.zeros[Double](numberOfTopics);
+      val qq = DenseVector.zeros[Double](numberOfTopics);
+      for (i <- 0 until numberOfTopics) {
+        gradient(i) = numberOfDocument * (Gamma.digamma(sum(alpha)) - Gamma.digamma(alpha(i))) + sufficientStats(i);
+        qq(i) = -1 / (numberOfDocument * Gamma.trigamma(alpha(i)))
       }
-      val z_1 = 1 / (D * Gamma.trigamma(sum(alpha)));
+      val z_1 = 1 / (numberOfDocument * Gamma.trigamma(sum(alpha)));
       val b = sum(gradient :* qq) / (z_1 + sum(qq));
       val step_size = (gradient - b) :* qq;
       var alpha_new = alpha;
@@ -207,6 +198,6 @@ object LDA {
   }
 
   def main(args: Array[String]) {
-    computeTopics(args)
+    runLDA(args)
   }
 }
