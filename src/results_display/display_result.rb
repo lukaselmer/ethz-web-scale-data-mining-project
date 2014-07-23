@@ -44,4 +44,26 @@ open(ARGV[0]).each do |line|
 end
 
 topics.sort_by! { |topic| topic.terms_by_name.first.word }
+# Shell output
 topics.each { |t| puts t.to_s }
+
+#topics = [topics[0], topics[1], topics[2]]
+
+# HTML output
+input = topics.map do |topic|
+  highest_probability = topic.terms_by_probability.first.probability
+  topic.terms_by_probability.each { |term| term.probability /= highest_probability }
+
+  topic_object = topic.terms_by_name.map do |term|
+    puts term.probability
+    "{text: '#{term.word}', size: #{10 + term.probability * 190}}"
+  end.join(',')
+
+  "[#{topic_object}]"
+end.join(",\n")
+
+require 'erb'
+f = File.read('html/layout.erb')
+outfile = 'html/index.html'
+File.delete outfile if File.exist? outfile
+File.write(outfile, f.gsub!('___input___', "[#{input}]"))
