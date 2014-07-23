@@ -43,13 +43,12 @@ object RemoveInfrequentWordsApp {
     val maxWordLength = 30
 
     sc.textFile(inputWordcountDirectory)
-      .take(minWordCount)
       .map(extractCountAndWord)
       // why doesn't this work in scala :'-( minWordCount <= countAndWord._1 <= maxWordCount
       .filter(countAndWord => minWordCount <= countAndWord._1 && countAndWord._1 <= maxWordCount)
       .map(_._2)
       .filter(_.length <= maxWordLength)
-      .toList.toSet
+      .collect.toSet
   }
 
   def processWords(text: Text, keepWords: Set[String]): Text = {
