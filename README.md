@@ -42,17 +42,32 @@ Author: [Lukas Elmer](https://github.com/lukaselmer)
 
 #### examples
 
+Contains a spark example project and a simple word count application. Only for dev env setup purposes.
 
+Author: [Lukas Elmer](https://github.com/lukaselmer)
 
 #### html_to_text_conversion
 
+
+Author: [Lukas Elmer](https://github.com/lukaselmer)
+
 #### remove_infrequent_words
 
+Author: [Lukas Elmer](https://github.com/lukaselmer)
+
 #### results_display
+
+A script to help displaying the topics. Generates
+
+* A readable text version
+* A tag cloud for each topic, each word size weighted by the probability of the word 
+
+Author: [Lukas Elmer](https://github.com/lukaselmer)
 
 #### scripts
 
 #### word_count
 
+Author: [Lukas Elmer](https://github.com/lukaselmer)
 
 
