@@ -1,4 +1,4 @@
-# ETH Zurich - Web Scale Data Mining Project
+# ETH Zurich - Web Scale Data Processing and Mining Project
 
 This is the main repository for the web scale data mining project, which took place in summer 2014 as a research project.
 
@@ -6,7 +6,7 @@ This is the main repository for the web scale data mining project, which took pl
 
 <pre>
 ├── doc - the report of the project
-└── src - the source code
+└── src - the source code projects, see below
     ├── WSDA
     ├── combine_sequence_files
     ├── examples
@@ -18,6 +18,12 @@ This is the main repository for the web scale data mining project, which took pl
     ├── scripts
     └── word_count
 </pre>
+
+### Other repositories
+
+The runs and the raw results can be found in [this repository](https://github.com/lukaselmer/ethz-web-scale-data-mining-project-runs).
+
+The hadoop config is [here](https://github.com/lukaselmer/ethz-web-scale-data-mining-project-hadoop-config).
 
 ### Source code projects
 
@@ -92,5 +98,7 @@ Simple word count for sequence files.
 [Example how to use it](https://github.com/lukaselmer/ethz-web-scale-data-mining-project-runs/blob/master/word_count4/run.sh)
 
 Author: [Lukas Elmer](https://github.com/lukaselmer)
+
+
 
 
