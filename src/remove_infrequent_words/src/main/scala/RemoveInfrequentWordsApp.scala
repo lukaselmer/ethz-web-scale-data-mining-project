@@ -88,7 +88,13 @@ object RemoveInfrequentWordsApp {
       sys.exit(1)
     }
 
-    conf.setAppName("Remove Infrequent Words: %s".format(configReader.toString))
+    conf.setAppName("Remove Infrequent Words")
+
+    println("=====================================")
+    println("Remove Infrequent Words Configuration")
+    println("-------------------------------------")
+    println(configReader.toString)
+    println("=====================================")
 
     new SparkContext(conf)
   }
