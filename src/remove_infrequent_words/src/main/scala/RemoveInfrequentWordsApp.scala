@@ -10,24 +10,24 @@ import org.apache.spark.{SparkConf, SparkContext}
 object RemoveInfrequentWordsApp {
 
   def main(args: Array[String]) {
-    val sc = createSparkContext()
-    val inputCombinedDirectory = sc.getConf.get("inputCombined")
-    val inputWordcountDirectory = sc.getConf.get("inputWordcount")
-    val outputDirectory = sc.getConf.get("output")
-    val minWordCount = sc.getConf.getInt("minWordCount", Int.MaxValue)
+    val conf = new SparkConf()
+    val configReader = new CommandLineConfigReader(conf, sys.env)
+    val sc = createSparkContext(conf, configReader)
 
+    val inputCombinedDirectory = configReader.inputCombined
+    val inputWordcountDirectory = configReader.inputWordcount
+    val outputDirectory = configReader.output
+    val minWordCount = configReader.minWordCount
+    val maxWordCount = configReader.maxWordCount
 
-    val keepWords: Set[String] = loadKeepWords(sc, inputWordcountDirectory, minWordCount)
+    val keepWords: Set[String] = loadKeepWords(sc, inputWordcountDirectory, minWordCount, maxWordCount)
 
     val processFileFunction = (inputFile: String) => processFile(inputFile, outputDirectory, keepWords)
     val filesToProcess = HadoopFileHelper.listHdfsFiles(new Path(inputCombinedDirectory)).filter(s => s.endsWith(".combined"))
-    if (sc.getConf.getBoolean("local", false))
-      filesToProcess.foreach(processFileFunction)
-    else
-      sc.parallelize(filesToProcess, filesToProcess.length).foreach(processFileFunction)
+    sc.parallelize(filesToProcess, filesToProcess.length).foreach(processFileFunction)
   }
 
-  def loadKeepWords(sc: SparkContext, inputWordcountDirectory: String, minWordCount: Int): Set[String] = {
+  def loadKeepWords(sc: SparkContext, inputWordcountDirectory: String, minWordCount: Int, maxWordCount: Int): Set[String] = {
     def extractCountAndWord = (x: String) => {
       // x will have the form of "(234,word)", without spaces
       val countAndWord = x.split(",")
@@ -45,7 +45,8 @@ object RemoveInfrequentWordsApp {
     sc.textFile(inputWordcountDirectory)
       .take(minWordCount)
       .map(extractCountAndWord)
-      .filter(_._1 >= minWordCount)
+      // why doesn't this work in scala :'-( minWordCount <= countAndWord._1 <= maxWordCount
+      .filter(countAndWord => minWordCount <= countAndWord._1 && countAndWord._1 <= maxWordCount)
       .map(_._2)
       .filter(_.length <= maxWordLength)
       .toList.toSet
@@ -81,36 +82,13 @@ object RemoveInfrequentWordsApp {
     writer
   }
 
-  def createSparkContext(): SparkContext = {
-    val conf = new SparkConf()
-
-    val configReader = new CommandLineConfigReader(conf, sys.env)
-
+  def createSparkContext(conf: SparkConf, configReader: CommandLineConfigReader): SparkContext = {
     if (!configReader.isCorrect) {
       configReader.printHelp()
       sys.exit(1)
     }
 
-    // Master is not set => use local master, and local data
-    if (configReader.isLocal) {
-      conf.setMaster("local[*]")
-      conf.set("local", "true")
-      conf.set("inputCombined", "data/cw-combined")
-      conf.set("inputWordcount", "data/cw-wordcount")
-      conf.set("output", "out/cw-combined-pruned")
-      scala.reflect.io.Path(conf.get("output")).deleteRecursively()
-      scala.reflect.io.Path(conf.get("output")).createDirectory(failIfExists = true)
-    } else {
-      conf.set("local", "false")
-      conf.set("inputCombined", configReader.inputCombined)
-      conf.set("inputWordcount", configReader.inputWordcount)
-      conf.set("output", configReader.output)
-    }
-
-    conf.set("minWordCount", configReader.minWordCount.toString)
-
-    val printConfig = "inputCombined inputWordcount output minWordCount".split(" ").map(k => k + "=" + conf.get(k)).mkString(", ")
-    conf.setAppName("Remove Infrequent Words: %s".format(printConfig))
+    conf.setAppName("Remove Infrequent Words: %s".format(configReader.toString))
 
     new SparkContext(conf)
   }
