@@ -25,7 +25,7 @@ The self-implemented LDA
 
 TODO: add some more doc, references, etc.
 
-Author @hany-abdelrahman
+Author: [Hany Abdelrahman](https://github.com/hany-abdelrahman)
 
 #### combine_sequence_files
 
@@ -34,4 +34,7 @@ into multiple sequence files. These sequence files have the same name as the sub
 
 This way, it is possible to create a flat directory structure whith few large sequence files.
 
-Author: https://github.com/lukaselmer http://github.com/lukaselmer @lukaselmer
+Author: [Lukas Elmer](https://github.com/lukaselmer)
+
+
+
