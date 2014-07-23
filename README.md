@@ -10,6 +10,8 @@ This is the main repository for the web scale data mining project, which took pl
     ├── WSDA
     ├── combine_sequence_files
     ├── examples
+    │   ├── spark_example
+    │   └── word_count_1
     ├── html_to_text_conversion
     ├── remove_infrequent_words
     ├── results_display
@@ -37,6 +39,20 @@ into multiple sequence files. These sequence files have the same name as the sub
 This way, it is possible to create a flat directory structure whith few large sequence files.
 
 Author: [Lukas Elmer](https://github.com/lukaselmer)
+
+#### examples
+
+
+
+#### html_to_text_conversion
+
+#### remove_infrequent_words
+
+#### results_display
+
+#### scripts
+
+#### word_count
 
 
 
