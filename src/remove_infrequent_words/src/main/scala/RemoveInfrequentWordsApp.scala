@@ -14,10 +14,10 @@ object RemoveInfrequentWordsApp {
     val inputCombinedDirectory = sc.getConf.get("inputCombined")
     val inputWordcountDirectory = sc.getConf.get("inputWordcount")
     val outputDirectory = sc.getConf.get("output")
-    val maximumDictionarySize = sc.getConf.getInt("maximumDictionarySize", 1)
+    val minWordCount = sc.getConf.getInt("minWordCount", Int.MaxValue)
 
 
-    val keepWords: Set[String] = loadKeepWords(sc, inputWordcountDirectory, maximumDictionarySize)
+    val keepWords: Set[String] = loadKeepWords(sc, inputWordcountDirectory, minWordCount)
 
     val processFileFunction = (inputFile: String) => processFile(inputFile, outputDirectory, keepWords)
     val filesToProcess = HadoopFileHelper.listHdfsFiles(new Path(inputCombinedDirectory)).filter(s => s.endsWith(".combined"))
@@ -27,10 +27,27 @@ object RemoveInfrequentWordsApp {
       sc.parallelize(filesToProcess, filesToProcess.length).foreach(processFileFunction)
   }
 
-  def loadKeepWords(sc: SparkContext, inputWordcountDirectory: String, maximumDictionarySize: Int): Set[String] = {
+  def loadKeepWords(sc: SparkContext, inputWordcountDirectory: String, minWordCount: Int): Set[String] = {
+    def extractCountAndWord = (x: String) => {
+      // x will have the form of "(234,word)", without spaces
+      val countAndWord = x.split(",")
+      val count = countAndWord.head.substring(1).toInt
+      // Handle words with commas
+      val word = countAndWord.tail.mkString(",").reverse.substring(1).reverse
+      (count, word)
+    }
+
+    // https://en.wikipedia.org/wiki/Longest_word_in_English
+    // http://www.webcitation.org/66sSvZqYP
+    // Longest non-coined word in a major dictionary
+    val maxWordLength = 30
+
     sc.textFile(inputWordcountDirectory)
-      .take(maximumDictionarySize)
-      .map(x => x.reverse.split(",").head.replaceFirst("\\)", "").reverse)
+      .take(minWordCount)
+      .map(extractCountAndWord)
+      .filter(_._1 >= minWordCount)
+      .map(_._2)
+      .filter(_.length <= maxWordLength)
       .toList.toSet
   }
 
@@ -67,8 +84,15 @@ object RemoveInfrequentWordsApp {
   def createSparkContext(): SparkContext = {
     val conf = new SparkConf()
 
+    val configReader = new CommandLineConfigReader(conf, sys.env)
+
+    if (!configReader.isCorrect) {
+      configReader.printHelp()
+      sys.exit(1)
+    }
+
     // Master is not set => use local master, and local data
-    if (!conf.contains("spark.master")) {
+    if (configReader.isLocal) {
       conf.setMaster("local[*]")
       conf.set("local", "true")
       conf.set("inputCombined", "data/cw-combined")
@@ -78,15 +102,14 @@ object RemoveInfrequentWordsApp {
       scala.reflect.io.Path(conf.get("output")).createDirectory(failIfExists = true)
     } else {
       conf.set("local", "false")
-      conf.set("inputCombined", "hdfs://dco-node121.dco.ethz.ch:54310/cw-combined")
-      conf.set("inputWordcount", "hdfs://dco-node121.dco.ethz.ch:54310/cw-wordcount")
-      conf.set("output", "hdfs://dco-node121.dco.ethz.ch:54310/cw-combined-pruned")
+      conf.set("inputCombined", configReader.inputCombined)
+      conf.set("inputWordcount", configReader.inputWordcount)
+      conf.set("output", configReader.output)
     }
 
-    conf.set("minPartitions", "10")
-    conf.set("maximumDictionarySize", "10")
+    conf.set("minWordCount", configReader.minWordCount.toString)
 
-    val printConfig = "inputCombined inputWordcount output minPartitions".split(" ").map(k => k + "=" + conf.get(k)).mkString(", ")
+    val printConfig = "inputCombined inputWordcount output minWordCount".split(" ").map(k => k + "=" + conf.get(k)).mkString(", ")
     conf.setAppName("Remove Infrequent Words: %s".format(printConfig))
 
     new SparkContext(conf)
