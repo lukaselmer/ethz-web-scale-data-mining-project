@@ -23,7 +23,7 @@ This is the main repository for the web scale data mining project, which took pl
 * [This](https://github.com/lukaselmer/ethz-web-scale-data-mining-project) is the code repository
 * The runs and the raw results can be found in [this repository](https://github.com/lukaselmer/ethz-web-scale-data-mining-project-runs)
 * The hadoop config is [here](https://github.com/lukaselmer/ethz-web-scale-data-mining-project-hadoop-config)
-* The spark config is [here](https://github.com/lukaselmer/ethz-web-scale-data-mining-project-hadoop-config)
+* The spark config is [here](https://github.com/lukaselmer/ethz-web-scale-data-mining-project-spark-config)
 
 ### Source code projects
 
