@@ -25,6 +25,8 @@ The self-implemented LDA
 
 TODO: add some more doc, references, etc.
 
+@hany-abdelrahman: the WSDA directory should probably be renamed to something more meaningful.
+
 Author: [Hany Abdelrahman](https://github.com/hany-abdelrahman)
 
 #### combine_sequence_files
