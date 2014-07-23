@@ -25,7 +25,7 @@ The self-implemented LDA
 
 TODO: add some more doc, references, etc.
 
-@hany-abdelrahman: the WSDA directory should probably be renamed to something more meaningful.
+@hany-abdelrahman: the WSDA directory should probably be renamed to something more meaningful :wink:
 
 Author: [Hany Abdelrahman](https://github.com/hany-abdelrahman)
 
