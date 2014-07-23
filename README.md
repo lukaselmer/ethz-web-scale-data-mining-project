@@ -5,7 +5,6 @@ This is the main repository for the web scale data mining project, which took pl
 ## Directory Structure and Overview
 
 <pre>
-├── doc - the report of the project
 └── src - the source code projects, see below
     ├── WSDA
     ├── combine_sequence_files
