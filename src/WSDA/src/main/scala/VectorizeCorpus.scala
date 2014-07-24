@@ -11,61 +11,52 @@ import java.io._
 
 object VectorizeCorpus {
   private val successExtension: String = ".success"
-  def createSparkContext(): SparkContext = {
-    val conf = new SparkConf().setAppName("Simple Application")
-    conf.set("spark.default.parallelism","200");
-    conf.set("spark.akka.frameSize","2000");
-    conf.set("spark.akka.timeout","2000");
-    conf.set("spark.worker.timeout", "2000")
-    // Master is not set => use local master, and local data
-    if (!conf.contains("spark.master")) {
-      conf.setMaster("local[*]")
-      conf.set("data", "data/sample.warc")
-    } else {
-      conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/")
-    }
+  /*
+  Convert a set of sequence files in text form to a vector space model. The final output is a set of sequence files
+  containing the vector space model and another file containing the dictionary.
 
-    new SparkContext(conf)
-  }
-
-
-  def main(args: Array[String]) {
-    buildVocabulary(args)
-  }
-
+  The output is a sequence file of key,value pairs, where the key is a document identifier and the value is a string:
+    v1:c1 v2:c2 v3:c3 vk:cK
+  where v is the index of the token in the dictionary, c is the number of occurence of the term v in the document
+   Params
+   1-input:             Path to the folder containing a set of sequence files of the dataset.
+   2-Stem:              A boolean flag, Set to True if it is desired to apply Porter stemming on every token
+   3-Filter Threshold:  An integer representing the minimum number of times a token occurs in the data set. Can be used
+                        to filter out low frequency terms.
+   4-Vocab Output       Path to store the final dictionary
+   5-Data Set Output    Path to store the vector space model of the data set.
+   */
   def buildVocabulary(args: Array[String]) {
-    val HDFS_ROOT = "hdfs://dco-node121.dco.ethz.ch:54310/"
-    //val HDFS_ROOT = ""
-    val input = HDFS_ROOT + args(0)
+    val input = args(0)
     val stem = args(1).toBoolean
     val filter_threshold = args(2).toInt
-    val vocabOutput = HDFS_ROOT + args(3)
-    val output = HDFS_ROOT + args(4)
+    val vocabOutput = args(3)
+    val output = args(4)
     val sc = createSparkContext();
 
     //Read vectorized data set
     var vocab = sc.sequenceFile[String, String](input+"*/*")
-                  .flatMap(a => a._2.split(" "));
+                  .flatMap({ case(document_id , document) => document.split("\\s+") });
 
     if(stem)
-      vocab = vocab.map(u => PorterStemmer.stem(u));
+      vocab = vocab.map(token => PorterStemmer.stem(token));
 
-    val vocabFiltered = vocab.filter(v => !v.isEmpty())
-                              .map(w => (w,1))
+    val vocabFiltered = vocab.filter(token => !token.isEmpty())
+                              .map(token => (token.replaceAll("\n","") ,1))
                               .reduceByKey(_ + _)
-                              .filter(f=> !f._1.isEmpty() && f._2 > filter_threshold)
-                              .map(f => f._1);
+                              .filter({ case(word, numberOfOccurence) => !word.isEmpty() && numberOfOccurence > filter_threshold })
+                              .map({ case (word, numberOfOccurence) => word });
 
     //Build a hash table of <word, index>
     val dictionary = new mutable.HashMap[String, Int];
-    var index = 0;
 
-    vocabFiltered.collect().foreach(word => {
+    val saved_dictionary = vocabFiltered.collect();
+
+    saved_dictionary.zipWithIndex.foreach({case(word, index) => {
       dictionary.put(word, index);
-      index += 1;
-    })
+      saved_dictionary(index) = word + " " + index;
+    }})
 
-    val saved_dictionary = dictionary.keys.toList;
     sc.parallelize(saved_dictionary,1).saveAsTextFile(vocabOutput);
     val broadcasted_dictionary = sc.broadcast(dictionary);
 
@@ -87,7 +78,7 @@ object VectorizeCorpus {
       {
         val frequency_table = new mutable.HashMap[Int, Int];
         var emit = new Text();
-        val content = value.toString().split(" ");
+        val content = value.toString().split("\\s+");
         content.foreach(w =>
         {
           var cur_word = w;
@@ -128,14 +119,30 @@ object VectorizeCorpus {
     }
     writer
   }
-
-  def writeToFile(p: String, s: String): Unit = {
-    val pw = new PrintWriter(new File(p))
-    try pw.write(s) finally pw.close()
-  }
-  def filesToProcess(inputDirectory: String): List[String] = {
+    def filesToProcess(inputDirectory: String): List[String] = {
     var inputFiles = HadoopFileHelper.listHdfsFiles(new Path(inputDirectory));
     inputFiles
+  }
+
+  def createSparkContext(): SparkContext = {
+    val conf = new SparkConf().setAppName("Simple Application")
+    conf.set("spark.default.parallelism","200");
+    conf.set("spark.akka.frameSize","2000");
+    conf.set("spark.akka.timeout","2000");
+    conf.set("spark.worker.timeout", "2000")
+    // Master is not set => use local master, and local data
+    if (!conf.contains("spark.master")) {
+      conf.setMaster("local[*]")
+      conf.set("data", "data/sample.warc")
+    } else {
+      conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/")
+    }
+
+    new SparkContext(conf)
+  }
+
+  def main(args: Array[String]) {
+    buildVocabulary(args)
   }
 
 }

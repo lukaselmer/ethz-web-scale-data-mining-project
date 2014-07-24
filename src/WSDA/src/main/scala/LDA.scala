@@ -12,17 +12,17 @@ import com.esotericsoftware.kryo.Kryo
 
 object LDA {
   val setting = new LdaSettings();
+
   /*
-  Entry point for executing LDA.
+  Entry point for computing LDA.
   args:
-  0: Input Path
-  1: OutputPath
-  2: Vocabulary count
-  3: Number of Topics
-  4: Settings file path
+  0: Input Path           -- A path to the folder containing a set of sequence files in vector space model.
+  1: OutputPath           -- A path to the folder to store the final results (Lambda matrix)
+  2: Vocabulary count     -- An upper bound on the number of distinct words in the corpus
+  3: Number of Topics     -- The number of topics to infer
+  4: Settings file path   -- A path to the settings file containing the training parameters (See example_settings)
    */
   def runLDA(args: Array[String]) {
-    val sc = createSparkContext();
 
     val DELTA = -1; //Special key to distinguish between Beta and Gamma updates in the reducer.
 
@@ -32,8 +32,9 @@ object LDA {
     val output = args(3);
     val settingsFilePath = args(4);
     setting.getSettings(settingsFilePath);
+    val sc = createSparkContext();
     //Read vectorized data set
-
+    //Every document is represented in the data set as k1:v1 k2:v2 .. Kn:vn, It is then mapped to a an array of key,value pairs
     val documents = sc.sequenceFile[String,String](input)
                       .zipWithIndex()
                       .map({ case((key, value), index) =>
@@ -49,7 +50,7 @@ object LDA {
                         Tuple2(document_words, doc_id)
                       }}).cache();
 
-     //Initialize Global Variables
+    //Initialize Global Variables
 
     val M = documents.count().toInt;
     var alpha = DenseVector.fill[Double](K){setting.ALPHA_INITIALIZATION}
@@ -168,9 +169,9 @@ object LDA {
   }
 
   def saveMatrix(matrix: DenseMatrix[Double], outputPath: String) {
-    val fs = FileSystem.get(new Configuration())
-    val fsout = fs.create(new Path(outputPath), true);
-    val pw = new PrintWriter(fsout);
+    val fileSystem = FileSystem.get(new Configuration())
+    val fileStream = fileSystem.create(new Path(outputPath), true);
+    val pw = new PrintWriter(fileStream);
     try {
       for (i <- 0 until matrix.rows) {
         var row = matrix(i, 0).toString();
@@ -185,9 +186,11 @@ object LDA {
 
   def createSparkContext(): SparkContext = {
     val conf = new SparkConf().setAppName("Spark LDA ")
-    conf.set("spark.default.parallelism","200");
+    conf.set("spark.default.parallelism","100");
     conf.set("spark.akka.frameSize","2000");
     conf.set("spark.akka.timeout","2000");
+    conf.set("spark.cores.max","50  ");
+    conf.set("spark.executor.memory","10g");
     if (!conf.contains("spark.master")) {
       conf.setMaster("local[*]")
       conf.set("data", "data/sample.warc")

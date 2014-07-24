@@ -9,7 +9,7 @@ class LdaSettings extends Serializable {
       val lines = scala.io.Source.fromFile(settingInputFile).getLines();
       while(lines.hasNext) {
         val params = lines.next().split("=");
-        val key = params(0);
+        val key = params(0).trim();
         val value = params(1).toDouble;
         settingDictionary.put(key, value);
       }
@@ -33,7 +33,7 @@ class LdaSettings extends Serializable {
   var ALPHA_MAX_ITERATION: Int = _              //Maximum Number of Iterations for updating hyper parameter Alpha
   var ETA: Double = _                           //Smoothing coefficient
   var DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD: Double = _ //Threshold for checking convergence of hyper parameter alpha
-  var ALPHA_UPDATE_DECAY_VALUE: Double = _      //Step size decay for the Hyper parameter update
+  var ALPHA_UPDATE_DECAY_VALUE: Double = _      //Step size decay for the alpha update
   var ALPHA_UPDATE_MAXIMUM_DECAY: Int = _       //Maximum number of decay steps
   var ALPHA_INITIALIZATION: Double = _          //Initial value of hyper parameter vector alpha
 }
