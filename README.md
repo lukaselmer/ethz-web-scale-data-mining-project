@@ -91,10 +91,6 @@ A script to help displaying the topics. Generates
 
 Author: [Lukas Elmer](https://github.com/lukaselmer)
 
-### scripts
-
-@raynald: do you still need them? If no, please delete them :wink:
-
 ### word_count
 
 Simple word count for sequence files.
