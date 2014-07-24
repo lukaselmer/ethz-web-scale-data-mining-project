@@ -60,9 +60,9 @@ object LDA {
     for(global_iteration <- 0 until setting.MAX_GLOBAL_ITERATION) {
       //Broadcast lambda at the beginning of every iteration
       val lambda_broadcast = sc.broadcast(lambda);
-      documents.flatMap(tup => {
-        val doc_id = tup._2
-        val document = tup._1;
+      documents.flatMap({case(document, doc_id) => {
+        //val doc_id = tup._2
+        //val document = tup._1;
         val digammaCache = DenseVector.zeros[Double](K);
         val gamma = DenseVector.fill[Double](K){ setting.ALPHA_INITIALIZATION + V/K };
         var emit = List[((Int, Int), Double)]()
@@ -100,7 +100,7 @@ object LDA {
           emit = emit.+:((k, DELTA), sufficient_statistics)
         }
         emit
-      }).reduceByKey(_ + _)
+      }}).reduceByKey(_ + _)
         .collect()
         .foreach({ case ((topicIndex, wordIndex), aggregate)=>
         {
@@ -119,7 +119,7 @@ object LDA {
       lambda = lambda.t;
       //Update alpha, for more details refer to section 3.4 in Mr. LDA
       alpha = updateAlphaVector(alpha, sufficientStats, K, M);
-      saveMatrix(lambda, output+"/lambda_" + global_iteration);
+      saveMatrix(lambda, output+"/beta_" + global_iteration);
     }
   }
 

@@ -35,7 +35,7 @@ object VectorizeCorpus {
     val sc = createSparkContext();
 
     //Read vectorized data set
-    var vocab = sc.sequenceFile[String, String](input+"*/*")
+    var vocab = sc.sequenceFile[String, String](input)
                   .flatMap({ case(document_id , document) => document.split("\\s+") });
 
     if(stem)
@@ -125,7 +125,7 @@ object VectorizeCorpus {
   }
 
   def createSparkContext(): SparkContext = {
-    val conf = new SparkConf().setAppName("Simple Application")
+    val conf = new SparkConf().setAppName("Vectorize Corpus")
     conf.set("spark.default.parallelism","200");
     conf.set("spark.akka.frameSize","2000");
     conf.set("spark.akka.timeout","2000");
@@ -137,7 +137,6 @@ object VectorizeCorpus {
     } else {
       conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/")
     }
-
     new SparkContext(conf)
   }
 

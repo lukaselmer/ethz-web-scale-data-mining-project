@@ -9,9 +9,11 @@ class LdaSettings extends Serializable {
       val lines = scala.io.Source.fromFile(settingInputFile).getLines();
       while(lines.hasNext) {
         val params = lines.next().split("=");
-        val key = params(0).trim();
-        val value = params(1).toDouble;
-        settingDictionary.put(key, value);
+        if(params.length == 2) {
+          val key = params(0).trim();
+          val value = params(1).toDouble;
+          settingDictionary.put(key, value);
+        }
       }
     }
     catch {

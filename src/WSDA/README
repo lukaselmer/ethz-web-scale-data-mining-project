@@ -1,0 +1,63 @@
+***************************
+LATENT DIRICHLET ALLOCATION
+***************************
+This is an implentation of LDA in scala / spark. The implementation relies on Breeze linear algebra library for scala.
+
+1. Data File Preparation 
+
+spark/bin/spark-submit --class VectorizeCorpus LDA.jar <input_path> <stem_token> <minimum_occurence_count> <vocab_output> <vector_space_model_output>
+
+Parameters Description: 
+
+input_path: A path to the folder containing a list of sequence files of documents, the input format is key value pairs where the key is a document identifier and the value is a string representing the document text. 
+
+stem_token: A boolean flag, set to True if it is desired to apply Porter stemming on every token. Should be used to reduce the vocabulary list. 
+
+minimum_occurence_count: An integer representing the minimum number of times a token should exist in the whole corpus. Can be used to filter low frequency terms.
+
+vocab_output: A path to store the final vocabulary list.
+
+vector_space_model_output: A path to store a list of sequence file of key value pairs. The key is a document identifier and the value is a sequence of index:word_count. 
+
+Example Usage:
+
+spark/bin/spark-submit --class VectorizeCorpus LDA.jar /cw-converted/ClueWeb12_00/ True 4 /ClueWeb_Dictionary_00 /ClueWeb_VSM_00
+ 
+2. Topic Inference: 
+
+spark/bin/spark-submit --class LDA LDA.jar <input_path> <vocab_length> <number_of_topics> <output_path> <settings_file>
+
+input_path: A path to the folder containing a list of sequence files of vector space model of the documents.
+
+vocab_length: A reasonable upper bound on the number of tokens in the vocabulary list.
+
+number_of topics: The number of topics to infer.
+
+output_path: A path to store the output of LDA. 
+
+settings_fike: A path to the settings file [See #3 for setting file details]. 
+
+The final output is a set of files representing the beta matrix at the end of every iteration of the algorithm.  
+
+3. Settings File 
+
+LDA requires some parameters which can be adjusted from the settings file. The parameters are
+
+MAX_GAMMA_CONVERGENCE_ITERATION 	  //Maximum Number of Iterations for Updating parameters Gamma, PHI in the mappers
+MAX_GLOBAL_ITERATION		          //Maximum Number of Global Iterations
+ALPHA_MAX_ITERATION		          //Maximum Number of Iterations for updating hyper parameter Alpha
+ETA				          //Smoothing coefficient
+DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD   //Threshold for checking convergence of hyper parameter alpha
+ALPHA_UPDATE_DECAY_VALUE		  //Step size decay for the alpha update
+ALPHA_UPDATE_MAXIMUM_DECAY		  //Maximum number of decay steps
+ALPHA_INITIALIZATION			  //Initial value of hyper parameter vector alpha
+
+4. Printing Topics
+
+The Python script topics.py lets you print out the top N
+words from each topic in a .beta file.  Usage is:
+
+python topics.py <beta file> <vocab file> <n words>
+
+The above python script is a part of the LDA implementation by Blei et al. It takes a few minutes to execute. 
+
