@@ -186,11 +186,10 @@ object LDA {
 
   def createSparkContext(): SparkContext = {
     val conf = new SparkConf().setAppName("Spark LDA ")
-    conf.set("spark.default.parallelism","100");
+    conf.set("spark.default.parallelism","500");
     conf.set("spark.akka.frameSize","2000");
     conf.set("spark.akka.timeout","2000");
-    conf.set("spark.cores.max","50  ");
-    conf.set("spark.executor.memory","10g");
+    conf.set("spark.kryoserializer.buffer.mb", "1000");
     if (!conf.contains("spark.master")) {
       conf.setMaster("local[*]")
       conf.set("data", "data/sample.warc")
