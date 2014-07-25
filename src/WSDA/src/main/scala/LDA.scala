@@ -1,7 +1,8 @@
-import java.io.{PrintWriter}
-import breeze.linalg.{DenseMatrix, DenseVector, sum, any, Axis}
-import breeze.numerics.{exp, abs}
+import java.io.{PrintWriter, File}
+import breeze.linalg._
+import breeze.numerics._
 import edu.umd.cloud9.math.Gamma
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.FileSystem
@@ -10,19 +11,26 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.SparkContext._
 import com.esotericsoftware.kryo.Kryo
 
+class LDARegistrator extends KryoRegistrator {
+  override def registerClasses(kryo: Kryo) {
+    kryo.register(classOf[DenseVector[Double]])
+    kryo.register(classOf[DenseMatrix[Double]])
+    kryo.register(classOf[LdaSettings])
+  }
+}
 object LDA {
-  val setting = new LdaSettings();
-
   /*
-  Entry point for computing LDA.
   args:
-  0: Input Path           -- A path to the folder containing a set of sequence files in vector space model.
-  1: Vocabulary count     -- An upper bound on the number of distinct words in the corpus
-  2: Number of Topics     -- The number of topics to infer
-  3: OutputPath           -- A path to the folder to store the final results (Lambda matrix)
-  4: Settings file path   -- A path to the settings file containing the training parameters (See example_settings)
+  0: Input Path
+  1: OutputPath
+  2: Vocab
+  3: Topics
    */
-  def runLDA(args: Array[String]) {
+  val setting = new LdaSettings();
+  setting.getSettings("Settings Path");
+
+  def computeTopics(args: Array[String]) {
+    val sc = createSparkContext();
 
     val DELTA = -1; //Special key to distinguish between Beta and Gamma updates in the reducer.
 
@@ -31,41 +39,37 @@ object LDA {
     val V = args(1).toInt
     val K = args(2).toInt
     val output = HDFS_ROOT + args(3);
-    val settingsFilePath = args(4);
-    setting.getSettings(settingsFilePath);
-    val sc = createSparkContext();
     //Read vectorized data set
-    //Every document is represented in the data set as k1:v1 k2:v2 .. Kn:vn, It is then mapped to a an array of key,value pairs
+
     val documents = sc.sequenceFile[String,String](input)
       .zipWithIndex()
       .map({ case((key, value), index) =>
     {
-      val doc = value ;
-      val doc_id = index;
-      val document_elements = doc.split(" ");
+      val doc = value ;//cur._1._2
+    val doc_id = index;//cur._2
+    val document_elements = doc.split(" ");
       //Parse every document element from key:value string to a tuple(key, value)
       val document_words = document_elements.map(e => {
         val params = e.split(":");
         Tuple2(params(0).toInt, params(1).toInt);
       })
-      Tuple2(document_words, doc_id)
+      document_words
+      //Tuple2(document_words, doc_id)
     }}).cache();
 
     //Initialize Global Variables
 
-    val M = documents.count().toInt;
-    var alpha = DenseVector.fill[Double](K){setting.ALPHA_INITIALIZATION}
+    val D = documents.count().toInt;
+    var alpha = DenseVector.fill[Double](K){setting.ALPHA_INITIALIZATION} // MR.LDA uses 0.001
     var lambda = DenseMatrix.fill[Double](V,K){ Math.random() / (Math.random() + V) };
     val sufficientStats = DenseVector.zeros[Double](K);
 
     for(global_iteration <- 0 until setting.MAX_GLOBAL_ITERATION) {
       //Broadcast lambda at the beginning of every iteration
       val lambda_broadcast = sc.broadcast(lambda);
-      documents.flatMap({case(document, doc_id) => {
-        //val doc_id = tup._2
-        //val document = tup._1;
+      documents.flatMap(document => {
         val digammaCache = DenseVector.zeros[Double](K);
-        val gamma = DenseVector.fill[Double](K){ setting.ALPHA_INITIALIZATION + V/K };
+        val gamma = DenseVector.fill[Double](K){0.1 + V/K };
         var emit = List[((Int, Int), Double)]()
         for (iteration <- 0 until setting.MAX_GAMMA_CONVERGENCE_ITERATION ) {
           val sigma = DenseVector.zeros[Double](K)
@@ -101,14 +105,14 @@ object LDA {
           emit = emit.+:((k, DELTA), sufficient_statistics)
         }
         emit
-      }}).reduceByKey(_ + _)
+      }).reduceByKey(_ + _)
         .collect()
-        .foreach({ case ((topicIndex, wordIndex), aggregate)=>
+        .foreach({ case ((k, v), aggregate)=>
       {
-        if (wordIndex != DELTA)
-          lambda(wordIndex, topicIndex) = setting.ETA + aggregate
+        if (v != DELTA)
+          lambda(v, k) = setting.ETA + aggregate
         else
-          sufficientStats(topicIndex) = aggregate;
+          sufficientStats(k) = aggregate;
       }});
 
       //normalize columns of lambda
@@ -119,23 +123,23 @@ object LDA {
       }
       lambda = lambda.t;
       //Update alpha, for more details refer to section 3.4 in Mr. LDA
-      alpha = updateAlphaVector(alpha, sufficientStats, K, M);
-      saveMatrix(lambda, output+"/beta_" + global_iteration);
+      alpha = updateAlphaVector(alpha, sufficientStats, K, D);
+      saveMatrix(lambda.t, output+"/lambda_" + global_iteration);
     }
   }
 
-  def updateAlphaVector(alpha_0:DenseVector[Double], sufficientStats: DenseVector[Double], numberOfTopics: Int, numberOfDocument: Long) : DenseVector[Double] = {
+  def updateAlphaVector(alpha_0:DenseVector[Double], sufficientStats: DenseVector[Double], K: Int, D: Long) : DenseVector[Double] = {
     var keepGoing = true;
     var alphaIteration_count = 0;
     var alpha = alpha_0;
     while (keepGoing) {
-      val gradient = DenseVector.zeros[Double](numberOfTopics);
-      val qq = DenseVector.zeros[Double](numberOfTopics);
-      for (i <- 0 until numberOfTopics) {
-        gradient(i) = numberOfDocument * (Gamma.digamma(sum(alpha)) - Gamma.digamma(alpha(i))) + sufficientStats(i);
-        qq(i) = -1 / (numberOfDocument * Gamma.trigamma(alpha(i)))
+      val gradient = DenseVector.zeros[Double](K);
+      val qq = DenseVector.zeros[Double](K);
+      for (i <- 0 until K) {
+        gradient(i) = D * (Gamma.digamma(sum(alpha)) - Gamma.digamma(alpha(i))) + sufficientStats(i);
+        qq(i) = -1 / (D * Gamma.trigamma(alpha(i)))
       }
-      val z_1 = 1 / (numberOfDocument * Gamma.trigamma(sum(alpha)));
+      val z_1 = 1 / (D * Gamma.trigamma(sum(alpha)));
       val b = sum(gradient :* qq) / (z_1 + sum(qq));
       val step_size = (gradient - b) :* qq;
       var alpha_new = alpha;
@@ -170,9 +174,9 @@ object LDA {
   }
 
   def saveMatrix(matrix: DenseMatrix[Double], outputPath: String) {
-    val fileSystem = FileSystem.get(new Configuration())
-    val fileStream = fileSystem.create(new Path(outputPath), true);
-    val pw = new PrintWriter(fileStream);
+    val fs = FileSystem.get(new Configuration())
+    val fsout = fs.create(new Path(outputPath), true);
+    val pw = new PrintWriter(fsout);
     try {
       for (i <- 0 until matrix.rows) {
         var row = matrix(i, 0).toString();
@@ -186,21 +190,17 @@ object LDA {
   }
 
   def createSparkContext(): SparkContext = {
-    val conf = new SparkConf().setAppName("Spark LDA ")
-    conf.set("spark.default.parallelism","500");
-    conf.set("spark.akka.frameSize","2000");
-    conf.set("spark.akka.timeout","2000");
+    val conf = new SparkConf().setAppName("Simple Application")
+    conf.set("spark.default.parallelism","200");
+    conf.set("spark.akka.frameSize","200");
+    conf.set("spark.akka.timeout","200");
+    conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+    conf.set("spark.kryo.registrator", "LDARegistrator")
     conf.set("spark.kryoserializer.buffer.mb", "1000");
-    if (!conf.contains("spark.master")) {
-      conf.setMaster("local[*]")
-      conf.set("data", "data/sample.warc")
-    } else {
-      conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/")
-    }
     new SparkContext(conf)
   }
 
   def main(args: Array[String]) {
-    runLDA(args)
+    computeTopics(args)
   }
 }
