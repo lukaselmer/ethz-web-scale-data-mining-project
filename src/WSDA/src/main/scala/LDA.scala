@@ -37,18 +37,18 @@ object LDA {
     //Every document is represented in the data set as k1:v1 k2:v2 .. Kn:vn, It is then mapped to a an array of key,value pairs
     val documents = sc.sequenceFile[String,String](input)
                       .zipWithIndex()
-                      .map({ case((key, value), index) =>
+                      .map(f =>
                       {
-                        val doc = value ;
-                        val doc_id = index;
+                        val doc = f._1._2;
+                        val doc_id = f._2;
                         val document_elements = doc.split(" ");
                         //Parse every document element from key:value string to a tuple(key, value)
                         val document_words = document_elements.map(e => {
                           val params = e.split(":");
                           Tuple2(params(0).toInt, params(1).toInt);
                         })
-                        Tuple2(document_words, doc_id)
-                      }}).cache();
+                        document_words
+                      }).cache();
 
     //Initialize Global Variables
 
@@ -60,7 +60,7 @@ object LDA {
     for(global_iteration <- 0 until setting.MAX_GLOBAL_ITERATION) {
       //Broadcast lambda at the beginning of every iteration
       val lambda_broadcast = sc.broadcast(lambda);
-      documents.flatMap({case(document, doc_id) => {
+      documents.flatMap(document=> {
         //val doc_id = tup._2
         //val document = tup._1;
         val digammaCache = DenseVector.zeros[Double](K);
@@ -100,15 +100,14 @@ object LDA {
           emit = emit.+:((k, DELTA), sufficient_statistics)
         }
         emit
-      }}).reduceByKey(_ + _)
+      }).reduceByKey(_ + _)
         .collect()
-        .foreach({ case ((topicIndex, wordIndex), aggregate)=>
-        {
-          if (wordIndex != DELTA)
-            lambda(wordIndex, topicIndex) = setting.ETA + aggregate
-          else
-            sufficientStats(topicIndex) = aggregate;
-        }});
+        .foreach(f => {
+        if (f._1._2 != DELTA)
+          lambda(f._1._2, f._1._1) = setting.ETA + f._2
+        else
+          sufficientStats(f._1._1) = f._2;
+      })
 
       //normalize columns of lambda
       lambda = lambda.t;
