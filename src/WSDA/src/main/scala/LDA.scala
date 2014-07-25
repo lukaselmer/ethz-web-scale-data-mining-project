@@ -19,7 +19,7 @@ class LDARegistrator extends KryoRegistrator {
   }
 }
 object LDA {
-
+  val setting = new LdaSettings();
   /*
   Entry point for computing LDA.
   args:
@@ -28,9 +28,7 @@ object LDA {
   2: Number of Topics     -- The number of topics to infer
   3: OutputPath           -- A path to the folder to store the final results (Lambda matrix)
   4: Settings file path   -- A path to the settings file containing the training parameters (See example_settings)
-  */  val setting = new LdaSettings();
-  setting.getSettings("Settings Path");
-
+  */
   def computeTopics(args: Array[String]) {
     val sc = createSparkContext();
     val DELTA = -1; //Special key to distinguish between Beta and Gamma updates in the reducer.
@@ -44,7 +42,7 @@ object LDA {
 
     //Read vectorized data set
     //Every document is represented in the data set as k1:v1 k2:v2 .. Kn:vn, It is then mapped to a an array of key,value pairs
-    val documents = sc.sequenceFile[String,String](input)
+    val documents = sc.sequenceFile[String,String](input,500)
       .zipWithIndex()
       .map({ case((key, value), index) =>
               {
