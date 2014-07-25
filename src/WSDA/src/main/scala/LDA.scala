@@ -17,38 +17,39 @@ object LDA {
   Entry point for computing LDA.
   args:
   0: Input Path           -- A path to the folder containing a set of sequence files in vector space model.
-  1: OutputPath           -- A path to the folder to store the final results (Lambda matrix)
-  2: Vocabulary count     -- An upper bound on the number of distinct words in the corpus
-  3: Number of Topics     -- The number of topics to infer
+  1: Vocabulary count     -- An upper bound on the number of distinct words in the corpus
+  2: Number of Topics     -- The number of topics to infer
+  3: OutputPath           -- A path to the folder to store the final results (Lambda matrix)
   4: Settings file path   -- A path to the settings file containing the training parameters (See example_settings)
    */
   def runLDA(args: Array[String]) {
 
     val DELTA = -1; //Special key to distinguish between Beta and Gamma updates in the reducer.
 
-    val input = args(0);
+    val HDFS_ROOT = "hdfs://dco-node121.dco.ethz.ch:54310/"
+    val input = HDFS_ROOT + args(0);
     val V = args(1).toInt
     val K = args(2).toInt
-    val output = args(3);
+    val output = HDFS_ROOT + args(3);
     val settingsFilePath = args(4);
     setting.getSettings(settingsFilePath);
     val sc = createSparkContext();
     //Read vectorized data set
     //Every document is represented in the data set as k1:v1 k2:v2 .. Kn:vn, It is then mapped to a an array of key,value pairs
     val documents = sc.sequenceFile[String,String](input)
-                      .zipWithIndex()
-                      .map(f =>
-                      {
-                        val doc = f._1._2;
-                        val doc_id = f._2;
-                        val document_elements = doc.split(" ");
-                        //Parse every document element from key:value string to a tuple(key, value)
-                        val document_words = document_elements.map(e => {
-                          val params = e.split(":");
-                          Tuple2(params(0).toInt, params(1).toInt);
-                        })
-                        document_words
-                      }).cache();
+      .zipWithIndex()
+      .map({ case((key, value), index) =>
+    {
+      val doc = value ;
+      val doc_id = index;
+      val document_elements = doc.split(" ");
+      //Parse every document element from key:value string to a tuple(key, value)
+      val document_words = document_elements.map(e => {
+        val params = e.split(":");
+        Tuple2(params(0).toInt, params(1).toInt);
+      })
+      Tuple2(document_words, doc_id)
+    }}).cache();
 
     //Initialize Global Variables
 
@@ -60,7 +61,7 @@ object LDA {
     for(global_iteration <- 0 until setting.MAX_GLOBAL_ITERATION) {
       //Broadcast lambda at the beginning of every iteration
       val lambda_broadcast = sc.broadcast(lambda);
-      documents.flatMap(document=> {
+      documents.flatMap({case(document, doc_id) => {
         //val doc_id = tup._2
         //val document = tup._1;
         val digammaCache = DenseVector.zeros[Double](K);
@@ -76,7 +77,7 @@ object LDA {
             val count = document(word_ind)._2;
             var phi = DenseVector.zeros[Double](K);
             for (k <- 0 until K)
-                phi(k) = lambda_broadcast.value(v, k) *digammaCache(k);
+              phi(k) = lambda_broadcast.value(v, k) *digammaCache(k);
             //normalize phi vector
             val v_norm = sum(phi);
             phi = phi :* (1 / v_norm);
@@ -100,14 +101,15 @@ object LDA {
           emit = emit.+:((k, DELTA), sufficient_statistics)
         }
         emit
-      }).reduceByKey(_ + _)
+      }}).reduceByKey(_ + _)
         .collect()
-        .foreach(f => {
-        if (f._1._2 != DELTA)
-          lambda(f._1._2, f._1._1) = setting.ETA + f._2
+        .foreach({ case ((topicIndex, wordIndex), aggregate)=>
+      {
+        if (wordIndex != DELTA)
+          lambda(wordIndex, topicIndex) = setting.ETA + aggregate
         else
-          sufficientStats(f._1._1) = f._2;
-      })
+          sufficientStats(topicIndex) = aggregate;
+      }});
 
       //normalize columns of lambda
       lambda = lambda.t;
