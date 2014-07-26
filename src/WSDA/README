@@ -51,7 +51,7 @@ DEFAULT_ALPHA_UPDATE_CONVERGE_THRESHOLD   //Threshold for checking convergence o
 ALPHA_UPDATE_DECAY_VALUE		  //Step size decay for the alpha update
 ALPHA_UPDATE_MAXIMUM_DECAY		  //Maximum number of decay steps
 ALPHA_INITIALIZATION			  //Initial value of hyper parameter vector alpha
-
+GAMMA_INITIALIZATION			  //Initial value of gamma vector
 4. Printing Topics
 
 The Python script topics.py lets you print out the top N
@@ -61,3 +61,9 @@ python topics.py <beta file> <vocab file> <n words>
 
 The above python script is a part of the LDA implementation by Blei et al. It takes a few minutes to execute. 
 
+5. Example 
+
+The following repository contains a sample dataset from Associated Press along with instructions on how to use this package 
+to perform topic modeling
+
+https://github.com/hany-abdelrahman/lda-example-data

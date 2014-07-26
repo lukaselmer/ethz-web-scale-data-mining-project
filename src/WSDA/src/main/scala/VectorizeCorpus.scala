@@ -10,7 +10,6 @@ import scala.collection.JavaConversions._
 import java.io._
 
 object VectorizeCorpus {
-  private val successExtension: String = ".success"
   /*
   Convert a set of sequence files in text form to a vector space model. The final output is a set of sequence files
   containing the vector space model and another file containing the dictionary.
@@ -20,7 +19,6 @@ object VectorizeCorpus {
   where v is the index of the token in the dictionary, c is the number of occurence of the term v in the document
    Params
    1-input:             Path to the folder containing a set of sequence files of the dataset.
-   2-Stem:              A boolean flag, Set to True if it is desired to apply Porter stemming on every token
    3-Filter Threshold:  An integer representing the minimum number of times a token occurs in the data set. Can be used
                         to filter out low frequency terms.
    4-Vocab Output       Path to store the final dictionary
@@ -102,7 +100,6 @@ object VectorizeCorpus {
           writer.append(key, emit);
       }
       writer.close()
-      getFileWriter(output + "/" + filePath + successExtension).close()
     });
   }
 
@@ -125,7 +122,7 @@ object VectorizeCorpus {
   }
 
   def createSparkContext(): SparkContext = {
-    val conf = new SparkConf().setAppName("Vectorize Corpus")
+    val conf = new SparkConf().setAppName("Simple Application")
     conf.set("spark.default.parallelism","200");
     conf.set("spark.akka.frameSize","2000");
     conf.set("spark.akka.timeout","2000");

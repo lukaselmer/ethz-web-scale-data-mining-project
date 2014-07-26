@@ -42,7 +42,7 @@ object LDA {
 
     //Read vectorized data set
     //Every document is represented in the data set as k1:v1 k2:v2 .. Kn:vn, It is then mapped to a an array of key,value pairs
-    val documents = sc.sequenceFile[String,String](input,500)
+    val documents = sc.sequenceFile[String,String](input,200)
       .zipWithIndex()
       .map({ case((key, value), index) =>
               {
@@ -126,6 +126,7 @@ object LDA {
       alpha = updateAlphaVector(alpha, sufficientStats, K, D);
       saveMatrix(lambda, output+"/lambda_" + global_iteration);
     }
+    saveMatrix(lambda, output+"/lambda_final");
   }
 
   def updateAlphaVector(alpha_0:DenseVector[Double], sufficientStats: DenseVector[Double], K: Int, D: Long) : DenseVector[Double] = {
@@ -192,11 +193,17 @@ object LDA {
   def createSparkContext(): SparkContext = {
     val conf = new SparkConf().setAppName("SPARK LDA")
     conf.set("spark.default.parallelism","200");
-    conf.set("spark.akka.frameSize","200");
-    conf.set("spark.akka.timeout","200");
-    conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-    conf.set("spark.kryo.registrator", "LDARegistrator")
-    conf.set("spark.kryoserializer.buffer.mb", "1000");
+    conf.set("spark.akka.frameSize","2000");
+    conf.set("spark.akka.timeout","2000");
+    //conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+    //conf.set("spark.kryo.registrator", "LDARegistrator")
+    conf.set("spark.kryoserializer.buffer.mb", "2000");
+    if (!conf.contains("spark.master")) {
+      conf.setMaster("local[*]")
+      conf.set("data", "data/sample.warc")
+    } else {
+      conf.set("data", "/mnt/cw12/cw-data/ClueWeb12_00/")
+    }
     new SparkContext(conf)
   }
 

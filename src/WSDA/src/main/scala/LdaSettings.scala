@@ -28,6 +28,7 @@ class LdaSettings extends Serializable {
     ALPHA_UPDATE_MAXIMUM_DECAY = settingDictionary.get("ALPHA_UPDATE_MAXIMUM_DECAY").getOrElse(11.0).toInt;
     ALPHA_UPDATE_DECAY_VALUE = settingDictionary.get("ALPHA_UPDATE_DECAY_VALUE").getOrElse(0.8);
     ALPHA_INITIALIZATION = settingDictionary.get("ALPHA_INITIALIZATION").getOrElse(0.001);
+    GAMMA_INITIALIZATION = settingDictionary.get("ALPHA_INITIALIZATION").getOrElse(0.1);
   }
 
   var MAX_GAMMA_CONVERGENCE_ITERATION: Int = _  //Maximum Number of Iterations for Updating parameters Gamma, PHI in the mappers
@@ -38,4 +39,5 @@ class LdaSettings extends Serializable {
   var ALPHA_UPDATE_DECAY_VALUE: Double = _      //Step size decay for the alpha update
   var ALPHA_UPDATE_MAXIMUM_DECAY: Int = _       //Maximum number of decay steps
   var ALPHA_INITIALIZATION: Double = _          //Initial value of hyper parameter vector alpha
+  var GAMMA_INITIALIZATION: Double = _          //Initial value of gamma
 }
