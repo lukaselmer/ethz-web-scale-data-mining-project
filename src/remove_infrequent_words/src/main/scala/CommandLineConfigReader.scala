@@ -47,6 +47,13 @@ class CommandLineConfigReader(conf: SparkConf, options: Map[String, String]) {
    */
   def minWordCount: Int = options.get("MIN_WORD_COUNT").get.toInt
 
+  /**
+   * Describes the maximum dictionary size.
+   * If the dictionary is too large, the less frequent words are removed.
+   * @return
+   */
+  def maxDictionarySize: Int = options.get("MAX_DICTIONARY_SIZE").get.toInt
+
   def output: String = options.getOrElse("OUTPUT", defaultOutput)
 
   def inputCombined: String = options.getOrElse("INPUT_COMBINED", defaultInputCombined)
