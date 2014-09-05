@@ -19,15 +19,16 @@ object RemoveInfrequentWordsApp {
     val outputDirectory = configReader.output
     val minWordCount = configReader.minWordCount
     val maxWordCount = configReader.maxWordCount
+    val maxDictionarySize = configReader.maxDictionarySize
 
-    val keepWords: Set[String] = loadKeepWords(sc, inputWordcountDirectory, minWordCount, maxWordCount)
+    val keepWords: Set[String] = loadKeepWords(sc, inputWordcountDirectory, minWordCount, maxWordCount, maxDictionarySize)
 
     val processFileFunction = (inputFile: String) => processFile(inputFile, outputDirectory, keepWords)
     val filesToProcess = HadoopFileHelper.listHdfsFiles(new Path(inputCombinedDirectory)).filter(s => s.endsWith(".combined"))
     sc.parallelize(filesToProcess, filesToProcess.length).foreach(processFileFunction)
   }
 
-  def loadKeepWords(sc: SparkContext, inputWordcountDirectory: String, minWordCount: Int, maxWordCount: Int): Set[String] = {
+  def loadKeepWords(sc: SparkContext, inputWordcountDirectory: String, minWordCount: Int, maxWordCount: Int, maxDictionarySize: Int): Set[String] = {
     def extractCountAndWord = (x: String) => {
       // x will have the form of "(234,word)", without spaces
       val countAndWord = x.split(",")
@@ -46,9 +47,15 @@ object RemoveInfrequentWordsApp {
       .map(extractCountAndWord)
       // why doesn't this work in scala :'-( minWordCount <= countAndWord._1 <= maxWordCount
       .filter(countAndWord => minWordCount <= countAndWord._1 && countAndWord._1 <= maxWordCount)
+      // filter long words
+      .filter(_._2.length <= maxWordLength)
+      .collect.toSeq
+      // sort them in memory, not using the cluster => potential bottleneck, but works fine with <= 1'000'000 entries
+      .sorted(Ordering.by[(Int, String), Int](-_._1))
+      // only use the words, ignore the counts
       .map(_._2)
-      .filter(_.length <= maxWordLength)
-      .collect.toSet
+      .take(maxDictionarySize)
+      .toSet
   }
 
   def processWords(text: Text, keepWords: Set[String]): Text = {
