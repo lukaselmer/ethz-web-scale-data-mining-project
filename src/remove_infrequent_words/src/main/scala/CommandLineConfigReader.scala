@@ -33,9 +33,26 @@ class CommandLineConfigReader(conf: SparkConf, options: Map[String, String]) {
     println("[optional] INPUT_WORDCOUNT: default: " + defaultIntputWordcount)
   }
 
+  /**
+   * Describes how often one word can appear at maximum (e.g. could be useful for generic stop words removal).
+   * If a word appears more often than this amount, it is removed.
+   * @return
+   */
   def maxWordCount: Int = options.getOrElse("MAX_WORD_COUNT", Int.MaxValue).toString.toInt
 
+  /**
+   * Describes how often one word has to appear at minimum.
+   * If a word appears less often than this amount, it is removed.
+   * @return
+   */
   def minWordCount: Int = options.get("MIN_WORD_COUNT").get.toInt
+
+  /**
+   * Describes the maximum dictionary size.
+   * If the dictionary is too large, the less frequent words are removed.
+   * @return
+   */
+  def maxDictionarySize: Int = options.get("MAX_DICTIONARY_SIZE").get.toInt
 
   def output: String = options.getOrElse("OUTPUT", defaultOutput)
 
