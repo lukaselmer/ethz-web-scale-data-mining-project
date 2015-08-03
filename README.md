@@ -64,7 +64,7 @@ Converts [web archive records](https://en.wikipedia.org/wiki/Web_ARChive) into s
 * remove numbers
 * remove URLs
 * convert uppercase to lowercase charaters
-* apply stemming
+* apply stemming (org.apache.lucene.analysis.en.EnglishAnalyzer)
 
 See also:
 * [Specs](https://github.com/lukaselmer/ethz-web-scale-data-mining-project/blob/master/src/html_to_text_conversion/src/test/scala/TextProcessorSpec.scala)
