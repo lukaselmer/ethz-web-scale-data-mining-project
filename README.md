@@ -2,6 +2,14 @@
 
 This is the main repository for the web scale data mining project, which took place in summer 2014 as a research project.
 
+## Results
+
+One of the results are the visualized topics, which have been learned autonomously from terabytes of raw HTML data.
+
+![One of 100 Visualized Topics](https://github.com/lukaselmer/ethz-web-scale-data-mining-project/raw/master/src/results_display/example_topic.png "One of 100 Visualized Topics")
+
+[More Results: 100 Learned Topics](https://github.com/lukaselmer/ethz-web-scale-data-mining-project/raw/master/src/results_display/example_output2_100_topics_visualized.pdf)
+
 ## Directory Structure and Overview
 
 <pre>
@@ -87,7 +95,7 @@ Author: [Lukas Elmer](https://github.com/lukaselmer)
 A script to help displaying the topics. Generates
 
 * A readable text version
-* A tag cloud for each topic, each word size weighted by the probability of the word 
+* A tag cloud for each topic, each word size weighted by the probability of the word
 
 Author: [Lukas Elmer](https://github.com/lukaselmer)
 
